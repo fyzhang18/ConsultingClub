@@ -1,0 +1,1625 @@
+---
+title: "Chronic Absenteeism - School Level Comparisons"
+author: "Felicia Zhang"
+date: '2018-06-03'
+output: pdf_document
+toc: yes
+toc_depth: 2
+fontsize: 12pt
+fig_height: 5
+fig_width: 7
+---
+
+```{r setup, include=FALSE, warning=FALSE}
+library(ggplot2) 
+library(zoo)
+library(reshape)
+library(plyr)
+library(dplyr)
+library(scales) 
+library(data.table)
+library(signal)
+library(matrixStats)
+library(lme4)
+library(arm)
+library(broom)
+library(tidyr)
+library(knitr)
+library(wesanderson)
+library(readxl)    
+library(extrafont)
+
+#LOAD MULTIPLE EXCEL SHEETS INTO SEPARATE DFS
+
+#get names of sheets
+sheets <- readxl::excel_sheets("~/Documents/Felicia Zhang/Felicia/Princeton/ConsultingClub/PerformanceReportsSchoolData_SY1617_FZ.xlsx")
+
+#load in excel data as 1 big file
+lst <- lapply(sheets, function(sheet) 
+  readxl::read_excel("~/Documents/Felicia Zhang/Felicia/Princeton/ConsultingClub/PerformanceReportsSchoolData_SY1617_FZ.xlsx", sheet = sheet)
+)
+
+#prepare names
+names(lst) <- sheets
+
+#turn it into DF
+list2env(lst, envir = .GlobalEnv)
+```
+
+```{r, echo=FALSE, warning=FALSE, include=FALSE}
+###Create Chronic Absenteeism percent for each grade, each school, and each district
+
+#*SchoolPercent is n of students absent/n of students in the grade NOT n of students absent/n of students in the school -_-
+
+poo <- EnrollmentTrendsByGrade
+
+#remove ungraded and Total Enrollment
+poo <- poo[!(poo$Grade=="Ungraded"),]
+poo <- poo[!(poo$Grade=="Total Enrollment"),]
+
+#remove the word Grade from beginning
+poo$Grade <- substring(poo$Grade, 7)
+
+#reformat poo Grade (it's written as 07 instead of 7)
+poo$Grade[poo$Grade=="01"] <- "1"
+poo$Grade[poo$Grade=="02"] <- "2"
+poo$Grade[poo$Grade=="03"] <- "3"
+poo$Grade[poo$Grade=="04"] <- "4"
+poo$Grade[poo$Grade=="05"] <- "5"
+poo$Grade[poo$Grade=="06"] <- "6"
+poo$Grade[poo$Grade=="07"] <- "7"
+poo$Grade[poo$Grade=="08"] <- "8"
+poo$Grade[poo$Grade=="09"] <- "9"
+
+poo2 <- ChronicAbsByGrade
+
+#combine the 2
+AbsentGrade <- merge(poo, poo2, by=c("CountyCode","DistrictCode","SchoolCode","Grade")) # NA's match
+
+#relabel SchoolPercent to GradePercent
+names(AbsentGrade)[5]<-"NumofStudents"
+names(AbsentGrade)[6]<-"GradePercent"
+
+#replace grades with numeric
+AbsentGrade$Grade[AbsentGrade$Grade=="PK"] <- "-1"
+AbsentGrade$Grade[AbsentGrade$Grade=="KG"] <- "0"
+
+#label missing values as NA
+AbsentGrade[AbsentGrade == "N"] <- NA
+AbsentGrade[AbsentGrade == "*"] <- NA
+
+#convert all columns to numeric
+AbsentGrade[] <- lapply(AbsentGrade, function(x) as.numeric(as.character(x)))
+
+#convert GradePercent to decimal
+AbsentGrade$GradePercent <- AbsentGrade$GradePercent/100
+
+#calculate Number of students absent using total number of students * percent absent
+AbsentGrade$NumStudentsAbsent <- AbsentGrade$NumofStudents * AbsentGrade$GradePercent
+AbsentGrade$NumStudentsAbsent <- round(AbsentGrade$NumStudentsAbsent)
+
+#get percent absent for each school
+AbsentSchool <- group_by(AbsentGrade,CountyCode,DistrictCode,SchoolCode) %>%
+  summarise(
+    percentabsent = sum(NumStudentsAbsent) / sum(NumofStudents)
+  )
+
+#get percent absent for each district
+AbsentDistrict <- group_by(AbsentGrade,CountyCode,DistrictCode) %>%
+  summarise(
+    percentabsent = sum(NumStudentsAbsent) / sum(NumofStudents)
+  )
+
+#Mercer county = 21
+
+```
+## Big picture look of the data
+
+### Distribution of chronic absenteeism rate in NJ
+
+```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.width=8, fig.height=6}
+#histogram of school absenteeism rate 
+#to see min, max, what’s the most common rate
+
+poo <- na.omit(AbsentSchool)
+
+#color mercer county differently
+poo$color <- 0
+poo$color[poo$CountyCode==21] <- 1
+
+ggplot(poo, aes(percentabsent, fill=factor(color)))+
+  geom_histogram(binwidth = 0.01)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Chronic absenteeism rate", y = "Number of schools")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_x_continuous(labels=percent,limits=c(-0.1,1),breaks=seq(-0.1,1,.1))+
+  theme(legend.position = "bottom")+
+  scale_fill_manual(values = c("#CCCCCC", "#FF6633"),name="County",breaks=c("0","1"),labels=c("Others", "Mercer"))+
+  theme(text=element_text(family="Times"))
+```
+\newpage
+
+### Distribution of chronic absenteeism rate in Mercer County
+
+```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.width=8, fig.height=6}
+poo <- na.omit(AbsentSchool)
+  
+#only mercer county
+poo2 <- subset(poo, CountyCode==21)
+
+ggplot(poo2, aes(percentabsent, fill=factor(DistrictCode)))+
+  geom_histogram(binwidth = 0.01)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Chronic absenteeism rate", y = "Number of schools")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_x_continuous(labels=percent,limits=c(-0.1,1),breaks=seq(-0.1,1,.1))+
+  scale_y_continuous(limits=c(0,11),breaks=seq(0,11,1))+
+  theme(legend.position = "bottom")+
+  scale_fill_brewer(palette="Set3",name="District")+
+  theme(text=element_text(family="Times"))
+```
+
+<center>
+District 1245 = East Windsor  
+District 1430 = Ewing   
+District 1950 = Hamilton  
+District 2280 = Hopewell  
+District 2580 = Lawrence  
+District 3105 = Mercer County Vocational  
+District 4255 = Princeton  
+District 5210 = Trenton  
+District 5510 = Robbinsville  
+District 5715 = Windsor-Plainsboro  
+</center>
+
+\newpage
+
+### Distribution of chronic absenteeism rate in Mercer County by Grade
+
+```{r, echo=FALSE, warning=FALSE}
+#Chronic absenteeism rate by grade in only mercer county
+poo <- AbsentGrade
+
+poo2 <- group_by(poo, CountyCode, DistrictCode, Grade) %>%
+  summarise(
+    percentabsent = mean(GradePercent)
+  )
+
+#only mercer county
+poo3 <- subset(poo2, CountyCode==21)
+
+poo.final <- group_by(poo3, Grade) %>%
+  summarise(
+    meanPercentabsent = mean(percentabsent, na.rm = TRUE),
+    sePercentabsent=sd(percentabsent, na.rm = TRUE)/sqrt(length(percentabsent))
+  )
+
+limits <- aes(ymax = meanPercentabsent + sePercentabsent, ymin=meanPercentabsent - sePercentabsent)
+
+ggplot(poo.final,aes(x=factor(Grade),y=meanPercentabsent,color=factor(Grade),fill=factor(Grade)))+
+  geom_bar(stat="identity")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Grade", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_y_continuous(labels=percent,limits=c(0,.5),breaks=seq(0,.5,.05))+  
+  scale_x_discrete(breaks=c("-1","0","1","2","3","4","5","6","7","8","9","10","11","12"),labels=c("PK", "KG","1","2","3","4","5","6","7","8","9","10","11","12"))+
+  theme(legend.position = "none")+
+  geom_errorbar(limits, width=0.25,color="black")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(text=element_text(family="Times"))
+```
+\newpage
+
+###Focusing on the good schools in Mercer County, which districts are they in?
+
+Good school is defined as a school with chronic absenteeism rate of 10% or less
+
+```{r, echo=FALSE, warning=FALSE}
+#calculate mean and SD
+poo <- na.omit(AbsentSchool)
+
+#only mercer county
+poo <- subset(poo, CountyCode==21)
+
+#look at good schools: anything less than 10%
+poo2 <- subset(poo, percentabsent < 0.1)
+
+#plot
+ggplot(poo2, aes(percentabsent, fill=factor(DistrictCode)))+
+  geom_histogram(binwidth = 0.01)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Chronic absenteeism rate", y = "Number of schools")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_y_continuous(limits=c(0,10),breaks=seq(0,10,1))+
+  scale_x_continuous(labels=percent,limits=c(-0.02,.14),breaks=seq(-0.02,.14,.02))+
+  theme(legend.position = "bottom")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(text=element_text(family="Times"))+
+  scale_fill_brewer(palette="Set3",name="District")
+```
+
+\newpage
+
+District 1950 (Hamilton) has the largest number of schools w low chronic absenteeism
+
+```{r, echo=FALSE, warning=FALSE}
+#plot histogram of school
+poo3 <- group_by(poo2, DistrictCode) %>%
+  summarise(
+    count = n()
+  )
+
+#sort by descending order
+poo3$DistrictCode <- factor(poo3$DistrictCode, levels = poo3$DistrictCode[order(-poo3$count)])
+
+ggplot(poo3, aes(x=factor(DistrictCode),y=count,color=factor(DistrictCode),fill=factor(DistrictCode)))+
+  geom_bar(stat="identity")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "District", y = "Number of schools")+
+  scale_y_continuous(limits=c(0,12),breaks=seq(0,12,2))+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(legend.position = "none")+
+  theme(text=element_text(family="Times"))+
+  scale_color_manual(values = c("#bebad9", "#bb81bc","#81b1d2","#90d3c7","#b4dc6f","#fffcb7","#f98175", "#d9d9d9","#fcb369","#fbcee5"))+
+  scale_fill_manual(values = c("#bebad9", "#bb81bc","#81b1d2","#90d3c7","#b4dc6f","#fffcb7","#f98175", "#d9d9d9","#fcb369","#fbcee5"))
+
+#best county in mercer is 1950, which has 11 schools that are good, and 5715 which has 8 schools
+```
+
+\newpage
+
+Districts 1245 (East Windsor), 2580 (Lawrence), 3105 (Mercer County Vocational), 5510 (Robbinsville), 5715 (Windsor-Plainsboro), have all of their schools categorized as low chronic absenteeism
+
+```{r, echo=FALSE, warning=FALSE}
+poo <- na.omit(AbsentSchool)
+
+#only mercer county
+poo2 <- subset(poo, CountyCode==21)
+
+#label low chronic absenteeism
+poo2$category <- 0
+poo2$category[poo2$percentabsent < 0.10001] <- 1
+
+#plot histogram of school
+poo3 <- group_by(poo2, DistrictCode) %>%
+  summarise(
+    percent = sum(category)/length(unique(SchoolCode))
+  )
+
+#sort by descending order
+poo3$DistrictCode <- factor(poo3$DistrictCode, levels = poo3$DistrictCode[order(-poo3$percent)])
+
+ggplot(poo3, aes(x=factor(DistrictCode),y=percent,color=factor(DistrictCode),fill=factor(DistrictCode)))+
+  geom_bar(stat="identity")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "District", y = "Percent of schools")+
+  scale_y_continuous(labels=percent)+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(legend.position = "none")+
+  theme(text=element_text(family="Times"))+
+  scale_color_manual(values = c("#90d3c7", "#81b1d2","#fcb369","#d9d9d9", "#bb81bc","#fffcb7", "#b4dc6f", "#bebad9","#f98175","#fbcee5"))+
+  scale_fill_manual(values = c("#90d3c7", "#81b1d2","#fcb369","#d9d9d9", "#bb81bc","#fffcb7", "#b4dc6f", "#bebad9","#f98175","#fbcee5"))
+
+#best county in mercer is 1950, which has 11 schools that are good, and 5715 which has 8 schools
+```
+\newpage
+
+###Focusing on the bad schools in Mercer County, which districts are they in?
+
+Bad school is defined as a school with chronic absenteeism rate of greater than 10%
+
+```{r, echo=FALSE, warning=FALSE}
+#calculate mean and SD
+poo <- na.omit(AbsentSchool)
+
+#only mercer county
+poo <- subset(poo, CountyCode==21)
+
+#look at bad schools, greater than 10%
+poo2 <- subset(poo, percentabsent > 0.1)
+
+#plot
+ggplot(poo2, aes(percentabsent, fill=factor(DistrictCode)))+
+  geom_histogram(binwidth = 0.01)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Chronic absenteeism rate", y = "Number of schools")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  scale_x_continuous(labels=percent,limits=c(0,.6),breaks=seq(0,.6,.1))+
+  scale_y_continuous(limits=c(0,4),breaks=seq(0,4,1))+
+  theme(legend.position = "bottom")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(text=element_text(family="Times"))+
+  scale_color_manual(values = c("#fffcb7", "#bebad9","#f98175","#b4dc6f","#fbcee5"))+
+  scale_fill_manual(values = c("#fffcb7", "#bebad9","#f98175","#b4dc6f","#fbcee5"), name="District")
+
+```
+
+\newpage
+
+District 5210 (Trenton) has the largest number of schools w high chronic absenteeism
+
+```{r, echo=FALSE, warning=FALSE}
+#plot histogram of school
+poo3 <- group_by(poo2, DistrictCode) %>%
+  summarise(
+    count = n()
+  )
+
+#sort by descending order
+poo3$DistrictCode <- factor(poo3$DistrictCode, levels = poo3$DistrictCode[order(-poo3$count)])
+
+ggplot(poo3, aes(x=factor(DistrictCode),y=count,color=factor(DistrictCode),fill=factor(DistrictCode)))+
+  geom_bar(stat="identity")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "District", y = "Number of schools")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_y_continuous(limits=c(0,20),breaks=seq(0,20,2))+
+  theme(legend.position = "none")+
+  theme(text=element_text(family="Times"))+
+  scale_color_manual(values = c("#fbcee5", "#bebad9","#f98175","#b4dc6f","#fffcb7"))+
+  scale_fill_manual(values = c("#fbcee5", "#bebad9","#f98175","#b4dc6f","#fffcb7"))
+
+#worst district is 5210, which has 19 schools that are considered bad
+```
+\newpage
+
+Districts 5210 (Trenton), 2280 (Hopewell), 1950 (Hamilton), 4255 (Princeton Regional), 1430 (Ewing) have schools that are considered high chronic absenteeism.  
+
+Trenton has the highest percentage with 95%. 
+
+```{r, echo=FALSE, warning=FALSE}
+poo <- na.omit(AbsentSchool)
+
+#only mercer county
+poo2 <- subset(poo, CountyCode==21)
+
+#label high chronic absenteeism
+poo2$category <- 0
+poo2$category[poo2$percentabsent > 0.10] <- 1
+
+#plot histogram of school
+poo3 <- group_by(poo2, DistrictCode) %>%
+  summarise(
+    percent = sum(category)/length(unique(SchoolCode))
+  )
+
+poo3 <- subset(poo3, percent > 0)
+
+#sort by descending order
+poo3$DistrictCode <- factor(poo3$DistrictCode, levels = poo3$DistrictCode[order(-poo3$percent)])
+
+ggplot(poo3, aes(x=factor(DistrictCode),y=percent,color=factor(DistrictCode),fill=factor(DistrictCode)))+
+  geom_bar(stat="identity")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "District", y = "Percent of schools")+
+  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(legend.position = "none")+
+  theme(text=element_text(family="Times"))+
+  scale_color_manual(values = c("#fbcee5", "#f98175","#bebad9","#b4dc6f","#fffcb7"))+
+  scale_fill_manual(values = c("#fbcee5", "#f98175","#bebad9","#b4dc6f","#fffcb7"))
+```
+\newpage
+
+##ALICE report: NJ
+
+In terms of education, New Jersey is in the “Massive Achievement Gap” range statewide, with only 28.7% of students from low-income families exceeding state average performance levels. New Jersey’s achievement gaps are larger than the national average across the board (page 49). 
+
+The gaps between Black and White students and between low-income and higher-income students did not budge from 2011 to 2013, while gaps between Hispanic and White students improved slightly.
+
+These differences impact graduation rates and college performance. Among teenagers, 79% of Blacks, 81% of Hispanics, and 80% of economically disadvantaged teenagers in the state went on to college after high school, compared to 94% of White students.  However, once in college, Black or Hispanic students were more likely to need remediation and had lower grade point averages than White students.
+
+Economically disadvantaged students in NJ are challenged to find quality, affordable child care, and quality K-12 schools that help them achieve at similar levels as their more economically advantaged peers (Mooney, 2015; Education Equality Index, 2016). When low-income or minority students have inadequate educational opportunities, the state economy loses talent and suffers from lower productivity from less-skilled workers.
+\newpage
+
+##ALICE report: Mercer County (pg. 81)
+In 2014, Mercer County had 39% of its household below the ALICE threshold (i.e. they live in poverty) (page 13).  
+
+In 2014, Trenton had 75% of its household below the ALICE threshold (page 14). This is likely related to chronic absenteeism found in Trenton district. 19/20 schools in Trenton are considered chronic absenteeism.
+
+**2014 data**  
+Population: 371,537 | Number of Households: 131,564  
+Median Household Income: 74,961 (state average: 71,919)  
+Unemployment Rate: 8.3% (state average: 7.5%)  
+ALICE Households: 27% (state average: 26%); Poverty Households: 12% (state average: 11%)  
+
+![Mercer County, 2014](/Users/Felicia/Documents/ConsultingClub/mercer2014ALICE.png) 
+
+\newpage
+
+```{r, echo=FALSE, warning=FALSE}
+######
+#preparing data frame in school level comparisons
+poo <- na.omit(AbsentSchool)
+
+#only mercer county
+poo2 <- subset(poo, CountyCode==21)
+
+#78 schools, let's look at top 20 and bottom 20 schools
+poo2$goodbad <- 0
+poo2$goodbad[poo2$percentabsent < 0.1000001] <- 1
+
+poo2$rank <- rank(poo2$percentabsent)
+
+poofinal <- subset(poo2, rank < 21 | rank > 59)
+```
+
+##What are the characteristics of good schools and bad schools?
+
+Bottom 25% is composed of 19 schools and top 25% is composed of 20 schools. 
+
+###Number of students
+
+```{r, echo=FALSE, warning=FALSE}
+#Mercer county
+foo <- subset(EnrollmentTrendsByGrade, CountyCode=="21") 
+
+#Keeping only the top and bottom 25% schools
+foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" | 
+                 DistrictCode=="1245" & SchoolCode=="080" |
+                 DistrictCode=="1430" & SchoolCode=="105" | 
+                 DistrictCode=="1950" & SchoolCode=="055" |
+                 DistrictCode=="1950" & SchoolCode=="060" | 
+                 DistrictCode=="1950" & SchoolCode=="210" |
+                 DistrictCode=="1950" & SchoolCode=="225" | 
+                 DistrictCode=="2280" & SchoolCode=="040" |
+                 DistrictCode=="2280" & SchoolCode=="065" | 
+                 DistrictCode=="2280" & SchoolCode=="075" |
+                 DistrictCode=="2580" & SchoolCode=="080" |
+                 DistrictCode=="2580" & SchoolCode=="100" | 
+                 DistrictCode=="3105" & SchoolCode=="301" |
+                 DistrictCode=="4255" & SchoolCode=="050" |
+                 DistrictCode=="4255" & SchoolCode=="080" |
+                 DistrictCode=="4255" & SchoolCode=="110" |
+                 DistrictCode=="5210" & SchoolCode=="030" |
+                 DistrictCode=="5210" & SchoolCode=="050" |
+                 DistrictCode=="5210" & SchoolCode=="051" |
+                 DistrictCode=="5210" & SchoolCode=="170" |
+                 DistrictCode=="5210" & SchoolCode=="190" |
+                 DistrictCode=="5210" & SchoolCode=="200" |
+                 DistrictCode=="5210" & SchoolCode=="210" |
+                 DistrictCode=="5210" & SchoolCode=="230" |
+                 DistrictCode=="5210" & SchoolCode=="235" |
+                 DistrictCode=="5210" & SchoolCode=="240" |
+                 DistrictCode=="5210" & SchoolCode=="260" |
+                 DistrictCode=="5210" & SchoolCode=="265" |
+                 DistrictCode=="5210" & SchoolCode=="270" |
+                 DistrictCode=="5210" & SchoolCode=="300" |
+                 DistrictCode=="5210" & SchoolCode=="310" |
+                 DistrictCode=="5210" & SchoolCode=="401" |
+                 DistrictCode=="5510" & SchoolCode=="030" |
+                 DistrictCode=="5715" & SchoolCode=="020" |
+                 DistrictCode=="5715" & SchoolCode=="025" |
+                 DistrictCode=="5715" & SchoolCode=="035" |
+                 DistrictCode=="5715" & SchoolCode=="040" |
+                 DistrictCode=="5715" & SchoolCode=="140" |
+                 DistrictCode=="5715" & SchoolCode=="150")
+
+#label if schools is good or bad
+foo$goodbad <- 1 #good
+foo$goodbad[foo$DistrictCode=="1950" & foo$SchoolCode=="055" | 
+              foo$DistrictCode=="1950" & foo$SchoolCode=="060" | 
+              foo$DistrictCode=="4255" & foo$SchoolCode=="050" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="030" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="050" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="051" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="170" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="190" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="200" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="210" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="230" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="235" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="240" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="260" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="265" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="270" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="300" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="310" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="401"] <- 0
+
+#remove total enrollment
+foo <- foo[!(foo$Grade=="Total Enrollment"),]
+
+#remove the word Grade from beginning
+foo$Grade <- substring(foo$Grade, 7)
+
+#reformat foo Grade (it's written as 07 instead of 7)
+foo$Grade[foo$Grade=="01"] <- "1"
+foo$Grade[foo$Grade=="02"] <- "2"
+foo$Grade[foo$Grade=="03"] <- "3"
+foo$Grade[foo$Grade=="04"] <- "4"
+foo$Grade[foo$Grade=="05"] <- "5"
+foo$Grade[foo$Grade=="06"] <- "6"
+foo$Grade[foo$Grade=="07"] <- "7"
+foo$Grade[foo$Grade=="08"] <- "8"
+foo$Grade[foo$Grade=="09"] <- "9"
+foo$Grade[foo$Grade=="PK"] <- "-1"
+foo$Grade[foo$Grade=="KG"] <- "0"
+foo$Grade[foo$Grade=="ed"] <- "99" #ungraded?
+
+#label missing values as NA
+foo[foo == "N"] <- NA
+foo[foo == "*"] <- NA
+
+#convert all columns to numeric
+foo[] <- lapply(foo, function(x) as.numeric(as.character(x)))
+
+#calculate total number of students in each grade 
+foo2 <- group_by(foo, goodbad) %>%
+  summarise(
+    numofstudents = sum(Count)
+  )
+
+ggplot(foo2,aes(x=factor(goodbad),y=numofstudents,color=factor(goodbad),fill=factor(goodbad)))+
+  geom_bar(stat="identity", position ="dodge")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Schools", y = "Number of students")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(legend.position = "none")+
+  theme(text=element_text(family="Times"))+
+  scale_fill_manual(values = c("#bebad9", "#3b6dae"))+
+  scale_color_manual(values = c("#bebad9", "#3b6dae"))+
+  scale_x_discrete(breaks=c("0","1"),labels=c("Bottom 25%", "Top 25%"))+
+  scale_y_continuous(labels = comma, limits=c(0,15000),breaks=seq(0,15000,3000))+
+  geom_text(
+    aes(label = numofstudents, numofstudents = numofstudents + 0.05),
+    position = position_dodge(0.9),
+    vjust = -0.5
+  )
+
+```
+
+\newpage
+
+###Grade breakdown 
+
+```{r, echo=FALSE, warning=FALSE,fig.width=8}
+#Mercer county
+foo <- subset(EnrollmentTrendsByGrade, CountyCode=="21")
+
+#Keeping only the top and bottom 25% schools
+foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" | 
+                 DistrictCode=="1245" & SchoolCode=="080" |
+                 DistrictCode=="1430" & SchoolCode=="105" | 
+                 DistrictCode=="1950" & SchoolCode=="055" |
+                 DistrictCode=="1950" & SchoolCode=="060" | 
+                 DistrictCode=="1950" & SchoolCode=="210" |
+                 DistrictCode=="1950" & SchoolCode=="225" | 
+                 DistrictCode=="2280" & SchoolCode=="040" |
+                 DistrictCode=="2280" & SchoolCode=="065" | 
+                 DistrictCode=="2280" & SchoolCode=="075" |
+                 DistrictCode=="2580" & SchoolCode=="080" |
+                 DistrictCode=="2580" & SchoolCode=="100" | 
+                 DistrictCode=="3105" & SchoolCode=="301" |
+                 DistrictCode=="4255" & SchoolCode=="050" |
+                 DistrictCode=="4255" & SchoolCode=="080" |
+                 DistrictCode=="4255" & SchoolCode=="110" |
+                 DistrictCode=="5210" & SchoolCode=="030" |
+                 DistrictCode=="5210" & SchoolCode=="050" |
+                 DistrictCode=="5210" & SchoolCode=="051" |
+                 DistrictCode=="5210" & SchoolCode=="170" |
+                 DistrictCode=="5210" & SchoolCode=="190" |
+                 DistrictCode=="5210" & SchoolCode=="200" |
+                 DistrictCode=="5210" & SchoolCode=="210" |
+                 DistrictCode=="5210" & SchoolCode=="230" |
+                 DistrictCode=="5210" & SchoolCode=="235" |
+                 DistrictCode=="5210" & SchoolCode=="240" |
+                 DistrictCode=="5210" & SchoolCode=="260" |
+                 DistrictCode=="5210" & SchoolCode=="265" |
+                 DistrictCode=="5210" & SchoolCode=="270" |
+                 DistrictCode=="5210" & SchoolCode=="300" |
+                 DistrictCode=="5210" & SchoolCode=="310" |
+                 DistrictCode=="5210" & SchoolCode=="401" |
+                 DistrictCode=="5510" & SchoolCode=="030" |
+                 DistrictCode=="5715" & SchoolCode=="020" |
+                 DistrictCode=="5715" & SchoolCode=="025" |
+                 DistrictCode=="5715" & SchoolCode=="035" |
+                 DistrictCode=="5715" & SchoolCode=="040" |
+                 DistrictCode=="5715" & SchoolCode=="140" |
+                 DistrictCode=="5715" & SchoolCode=="150")
+
+#label if schools is good or bad
+foo$goodbad <- 1 #good
+foo$goodbad[foo$DistrictCode=="1950" & foo$SchoolCode=="055" | 
+              foo$DistrictCode=="1950" & foo$SchoolCode=="060" | 
+              foo$DistrictCode=="4255" & foo$SchoolCode=="050" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="030" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="050" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="051" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="170" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="190" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="200" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="210" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="230" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="235" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="240" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="260" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="265" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="270" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="300" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="310" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="401"] <- 0
+
+
+#remove total enrollment
+foo <- foo[!(foo$Grade=="Total Enrollment"),]
+
+#remove the word Grade from beginning
+foo$Grade <- substring(foo$Grade, 7)
+
+#reformat foo Grade (it's written as 07 instead of 7)
+foo$Grade[foo$Grade=="01"] <- "1"
+foo$Grade[foo$Grade=="02"] <- "2"
+foo$Grade[foo$Grade=="03"] <- "3"
+foo$Grade[foo$Grade=="04"] <- "4"
+foo$Grade[foo$Grade=="05"] <- "5"
+foo$Grade[foo$Grade=="06"] <- "6"
+foo$Grade[foo$Grade=="07"] <- "7"
+foo$Grade[foo$Grade=="08"] <- "8"
+foo$Grade[foo$Grade=="09"] <- "9"
+foo$Grade[foo$Grade=="PK"] <- "-1"
+foo$Grade[foo$Grade=="KG"] <- "0"
+foo$Grade[foo$Grade=="ed"] <- "99" #ungraded?
+
+#label missing values as NA
+foo[foo == "N"] <- NA
+foo[foo == "*"] <- NA
+
+#convert all columns to numeric
+foo[] <- lapply(foo, function(x) as.numeric(as.character(x)))
+
+#calculate total number of students in each grade 
+foo2 <- group_by(foo, goodbad, Grade) %>%
+  summarise(
+    numofstudents = sum(Count)
+  )
+
+#calculate total num of students for county 13 and 3
+xgood <- sum(foo2$numofstudents[foo2$goodbad==1])
+xbad <- sum(foo2$numofstudents[foo2$goodbad==0])
+
+#divide to get percent
+foo2$percent <- 0
+foo2$percent[1:15] <- foo2$numofstudents[1:15] / xbad
+foo2$percent[16:30] <- foo2$numofstudents[16:30] / xgood
+
+ggplot(foo2,aes(x=factor(Grade),y=percent,color=factor(goodbad),fill=factor(goodbad)))+
+  geom_bar(stat="identity", position ="dodge")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Grade", y = "Percent of students")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_y_continuous(labels=percent,limits=c(0,.2),breaks=seq(0,.2,.02))+
+  scale_x_discrete(breaks=c("-1","0","1","2","3","4","5","6","7","8","9","10","11","12","99"),labels=c("PK", "KG","1","2","3","4","5","6","7","8","9","10","11","12","Ungraded"))+
+  theme(legend.position = "bottom")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(text=element_text(family="Times"))+
+  scale_fill_manual(values = c("#bebad9", "#3b6dae"), name="Schools", breaks=c("0","1"), labels=c("Bottom 25%", "Top 25%"))+
+  scale_color_manual(values = c("#bebad9", "#3b6dae"))+
+  guides(color=FALSE)
+
+```
+
+Bottom 25% of schools have more students in older grades (9-12), whereas top 25% of schools have more students in middle school grade (6-8).
+\newpage
+
+###Gender breakdown 
+
+```{r, echo=FALSE, warning=FALSE,fig.width=10}
+#Mercer County
+foo <- subset(EnrollmentTrendsByStudentGroup, CountyCode=="21")
+
+#keep gender information only
+foo <- subset(foo, StudentGroup == "Male" | StudentGroup == "Female")
+
+#Keeping only the top and bottom 25% schools
+foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" | 
+                 DistrictCode=="1245" & SchoolCode=="080" |
+                 DistrictCode=="1430" & SchoolCode=="105" | 
+                 DistrictCode=="1950" & SchoolCode=="055" |
+                 DistrictCode=="1950" & SchoolCode=="060" | 
+                 DistrictCode=="1950" & SchoolCode=="210" |
+                 DistrictCode=="1950" & SchoolCode=="225" | 
+                 DistrictCode=="2280" & SchoolCode=="040" |
+                 DistrictCode=="2280" & SchoolCode=="065" | 
+                 DistrictCode=="2280" & SchoolCode=="075" |
+                 DistrictCode=="2580" & SchoolCode=="080" |
+                 DistrictCode=="2580" & SchoolCode=="100" | 
+                 DistrictCode=="3105" & SchoolCode=="301" |
+                 DistrictCode=="4255" & SchoolCode=="050" |
+                 DistrictCode=="4255" & SchoolCode=="080" |
+                 DistrictCode=="4255" & SchoolCode=="110" |
+                 DistrictCode=="5210" & SchoolCode=="030" |
+                 DistrictCode=="5210" & SchoolCode=="050" |
+                 DistrictCode=="5210" & SchoolCode=="051" |
+                 DistrictCode=="5210" & SchoolCode=="170" |
+                 DistrictCode=="5210" & SchoolCode=="190" |
+                 DistrictCode=="5210" & SchoolCode=="200" |
+                 DistrictCode=="5210" & SchoolCode=="210" |
+                 DistrictCode=="5210" & SchoolCode=="230" |
+                 DistrictCode=="5210" & SchoolCode=="235" |
+                 DistrictCode=="5210" & SchoolCode=="240" |
+                 DistrictCode=="5210" & SchoolCode=="260" |
+                 DistrictCode=="5210" & SchoolCode=="265" |
+                 DistrictCode=="5210" & SchoolCode=="270" |
+                 DistrictCode=="5210" & SchoolCode=="300" |
+                 DistrictCode=="5210" & SchoolCode=="310" |
+                 DistrictCode=="5210" & SchoolCode=="401" |
+                 DistrictCode=="5510" & SchoolCode=="030" |
+                 DistrictCode=="5715" & SchoolCode=="020" |
+                 DistrictCode=="5715" & SchoolCode=="025" |
+                 DistrictCode=="5715" & SchoolCode=="035" |
+                 DistrictCode=="5715" & SchoolCode=="040" |
+                 DistrictCode=="5715" & SchoolCode=="140" |
+                 DistrictCode=="5715" & SchoolCode=="150")
+
+#label if schools is good or bad
+foo$goodbad <- 1 #good
+foo$goodbad[foo$DistrictCode=="1950" & foo$SchoolCode=="055" | 
+              foo$DistrictCode=="1950" & foo$SchoolCode=="060" | 
+              foo$DistrictCode=="4255" & foo$SchoolCode=="050" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="030" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="050" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="051" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="170" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="190" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="200" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="210" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="230" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="235" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="240" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="260" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="265" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="270" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="300" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="310" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="401"] <- 0
+
+
+#label missing values as NA
+foo[foo == "N"] <- NA
+foo[foo == "*"] <- NA
+
+#convert all columns to numeric
+foo$CountyCode <- as.numeric(as.character(foo$CountyCode))
+foo$DistrictCode <- as.numeric(as.character(foo$DistrictCode))
+foo$SchoolCode <- as.numeric(as.character(foo$SchoolCode))
+foo$Percent <- as.numeric(as.character(foo$Percent))
+
+#convert race group to numbers
+foo$group <- 1 #Female = 1
+foo$group[foo$StudentGroup=="Male"] <- 2
+
+#convert number to decimal
+foo$Percent <- foo$Percent / 100
+
+#calculate total number of students in each grade 
+foo2 <- group_by(foo, goodbad, group) %>%
+  summarise(
+    meanpercent = mean(Percent, na.rm = TRUE),
+    sepercent=sd(Percent, na.rm = TRUE)/sqrt(length(Percent))
+  )
+
+limits <- aes(ymax = meanpercent + sepercent, ymin=meanpercent - sepercent)
+
+ggplot(foo2,aes(x=factor(group),y=meanpercent,color=factor(goodbad),fill=factor(goodbad)))+
+  geom_bar(stat="identity", position ="dodge")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Student group", y = "Percent of students")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_y_continuous(labels=percent,limits=c(0,.6),breaks=seq(0,.6,.1))+
+  scale_x_discrete(breaks=c("1","2"),labels=c("Female", "Male"))+
+  theme(legend.position = "bottom")+
+  theme(text=element_text(family="Times"))+
+  scale_fill_manual(values = c("#bebad9", "#3b6dae"), name="Schools", breaks=c("0","1"), labels=c("Bottom 25%", "Top 25%"))+
+  scale_color_manual(values = c("#bebad9", "#3b6dae"))+
+  geom_errorbar(limits, width=0.25, color="black",position=position_dodge(width=0.9))+
+  guides(color=FALSE)
+```
+
+The two quartiles have same percentage of students that are female and male.
+\newpage
+
+###Ethnicity breakdown 
+
+```{r, echo=FALSE, warning=FALSE, fig.width=10}
+#Mercer County
+foo <- subset(EnrollmentByRacialEthnicGroup, CountyCode=="21") 
+
+#Keeping only the top and bottom 25% schools
+foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" | 
+                 DistrictCode=="1245" & SchoolCode=="080" |
+                 DistrictCode=="1430" & SchoolCode=="105" | 
+                 DistrictCode=="1950" & SchoolCode=="055" |
+                 DistrictCode=="1950" & SchoolCode=="060" | 
+                 DistrictCode=="1950" & SchoolCode=="210" |
+                 DistrictCode=="1950" & SchoolCode=="225" | 
+                 DistrictCode=="2280" & SchoolCode=="040" |
+                 DistrictCode=="2280" & SchoolCode=="065" | 
+                 DistrictCode=="2280" & SchoolCode=="075" |
+                 DistrictCode=="2580" & SchoolCode=="080" |
+                 DistrictCode=="2580" & SchoolCode=="100" | 
+                 DistrictCode=="3105" & SchoolCode=="301" |
+                 DistrictCode=="4255" & SchoolCode=="050" |
+                 DistrictCode=="4255" & SchoolCode=="080" |
+                 DistrictCode=="4255" & SchoolCode=="110" |
+                 DistrictCode=="5210" & SchoolCode=="030" |
+                 DistrictCode=="5210" & SchoolCode=="050" |
+                 DistrictCode=="5210" & SchoolCode=="051" |
+                 DistrictCode=="5210" & SchoolCode=="170" |
+                 DistrictCode=="5210" & SchoolCode=="190" |
+                 DistrictCode=="5210" & SchoolCode=="200" |
+                 DistrictCode=="5210" & SchoolCode=="210" |
+                 DistrictCode=="5210" & SchoolCode=="230" |
+                 DistrictCode=="5210" & SchoolCode=="235" |
+                 DistrictCode=="5210" & SchoolCode=="240" |
+                 DistrictCode=="5210" & SchoolCode=="260" |
+                 DistrictCode=="5210" & SchoolCode=="265" |
+                 DistrictCode=="5210" & SchoolCode=="270" |
+                 DistrictCode=="5210" & SchoolCode=="300" |
+                 DistrictCode=="5210" & SchoolCode=="310" |
+                 DistrictCode=="5210" & SchoolCode=="401" |
+                 DistrictCode=="5510" & SchoolCode=="030" |
+                 DistrictCode=="5715" & SchoolCode=="020" |
+                 DistrictCode=="5715" & SchoolCode=="025" |
+                 DistrictCode=="5715" & SchoolCode=="035" |
+                 DistrictCode=="5715" & SchoolCode=="040" |
+                 DistrictCode=="5715" & SchoolCode=="140" |
+                 DistrictCode=="5715" & SchoolCode=="150")
+
+#label if schools is good or bad
+foo$goodbad <- 1 #good
+foo$goodbad[foo$DistrictCode=="1950" & foo$SchoolCode=="055" | 
+              foo$DistrictCode=="1950" & foo$SchoolCode=="060" | 
+              foo$DistrictCode=="4255" & foo$SchoolCode=="050" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="030" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="050" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="051" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="170" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="190" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="200" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="210" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="230" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="235" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="240" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="260" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="265" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="270" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="300" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="310" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="401"] <- 0
+
+#label missing values as NA
+foo[foo == "N"] <- NA
+foo[foo == "*"] <- NA
+
+#convert all columns to numeric
+foo$CountyCode <- as.numeric(as.character(foo$CountyCode))
+foo$DistrictCode <- as.numeric(as.character(foo$DistrictCode))
+foo$SchoolCode <- as.numeric(as.character(foo$SchoolCode))
+foo$Percent <- as.numeric(as.character(foo$Percent))
+
+#convert race group to numbers
+foo$ethnic <- 1
+foo$ethnic[foo$RacialAndEthnicGroup=="Asian"] <- 2
+foo$ethnic[foo$RacialAndEthnicGroup=="Black or African American"] <- 3 
+foo$ethnic[foo$RacialAndEthnicGroup=="Hispanic"] <- 4 
+foo$ethnic[foo$RacialAndEthnicGroup=="Native Hawaiian or Pacific Islander"] <- 5 
+foo$ethnic[foo$RacialAndEthnicGroup=="Two or More Races"] <- 6 
+foo$ethnic[foo$RacialAndEthnicGroup=="White"] <- 7 
+
+#convert number to decimal
+foo$Percent <- foo$Percent / 100
+
+#calculate total number of students in each grade 
+foo2 <- group_by(foo, goodbad, ethnic) %>%
+  summarise(
+    meanpercent = mean(Percent, na.rm = TRUE),
+    sepercent=sd(Percent, na.rm = TRUE)/sqrt(length(Percent))
+  )
+
+limits <- aes(ymax = meanpercent + sepercent, ymin=meanpercent - sepercent)
+
+ggplot(foo2,aes(x=factor(ethnic),y=meanpercent,color=factor(goodbad),fill=factor(goodbad)))+
+  geom_bar(stat="identity", position ="dodge")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Ethnicity", y = "Percent of students")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_y_continuous(labels=percent,limits=c(0,.6),breaks=seq(0,.6,.1))+
+  scale_x_discrete(breaks=c("1","2","3","4","5","6","7"),labels=c("Native American", "Asian","Black","Hispanic","Hawaiian/PacIslander","2+ Races","White"))+
+  theme(legend.position = "bottom")+
+  theme(text=element_text(family="Times"))+
+  scale_fill_manual(values = c("#bebad9", "#3b6dae"), name="Schools", breaks=c("0","1"), labels=c("Bottom 25%", "Top 25%"))+
+  scale_color_manual(values = c("#bebad9", "#3b6dae"))+
+  geom_errorbar(limits, width=0.25, color="black",position=position_dodge(width=0.9))+
+  guides(color=FALSE)
+  
+```
+
+The ethnicity composition for the two quartiles are very different. Bottom 25% of schools have significantly less Asian, significantly more Black, significantly more Hispanic, less mixed race and significantly less White students. 
+\newpage
+
+###Student group breakdown 
+
+```{r, echo=FALSE, warning=FALSE,fig.width=10}
+#mercer county
+foo <- subset(EnrollmentTrendsByStudentGroup, CountyCode=="21") 
+
+#removing gender information
+foo <- subset(foo, StudentGroup != "Male" & StudentGroup != "Female")
+
+#Keeping only the top and bottom 25% schools
+foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" | 
+                 DistrictCode=="1245" & SchoolCode=="080" |
+                 DistrictCode=="1430" & SchoolCode=="105" | 
+                 DistrictCode=="1950" & SchoolCode=="055" |
+                 DistrictCode=="1950" & SchoolCode=="060" | 
+                 DistrictCode=="1950" & SchoolCode=="210" |
+                 DistrictCode=="1950" & SchoolCode=="225" | 
+                 DistrictCode=="2280" & SchoolCode=="040" |
+                 DistrictCode=="2280" & SchoolCode=="065" | 
+                 DistrictCode=="2280" & SchoolCode=="075" |
+                 DistrictCode=="2580" & SchoolCode=="080" |
+                 DistrictCode=="2580" & SchoolCode=="100" | 
+                 DistrictCode=="3105" & SchoolCode=="301" |
+                 DistrictCode=="4255" & SchoolCode=="050" |
+                 DistrictCode=="4255" & SchoolCode=="080" |
+                 DistrictCode=="4255" & SchoolCode=="110" |
+                 DistrictCode=="5210" & SchoolCode=="030" |
+                 DistrictCode=="5210" & SchoolCode=="050" |
+                 DistrictCode=="5210" & SchoolCode=="051" |
+                 DistrictCode=="5210" & SchoolCode=="170" |
+                 DistrictCode=="5210" & SchoolCode=="190" |
+                 DistrictCode=="5210" & SchoolCode=="200" |
+                 DistrictCode=="5210" & SchoolCode=="210" |
+                 DistrictCode=="5210" & SchoolCode=="230" |
+                 DistrictCode=="5210" & SchoolCode=="235" |
+                 DistrictCode=="5210" & SchoolCode=="240" |
+                 DistrictCode=="5210" & SchoolCode=="260" |
+                 DistrictCode=="5210" & SchoolCode=="265" |
+                 DistrictCode=="5210" & SchoolCode=="270" |
+                 DistrictCode=="5210" & SchoolCode=="300" |
+                 DistrictCode=="5210" & SchoolCode=="310" |
+                 DistrictCode=="5210" & SchoolCode=="401" |
+                 DistrictCode=="5510" & SchoolCode=="030" |
+                 DistrictCode=="5715" & SchoolCode=="020" |
+                 DistrictCode=="5715" & SchoolCode=="025" |
+                 DistrictCode=="5715" & SchoolCode=="035" |
+                 DistrictCode=="5715" & SchoolCode=="040" |
+                 DistrictCode=="5715" & SchoolCode=="140" |
+                 DistrictCode=="5715" & SchoolCode=="150")
+
+#label if schools is good or bad
+foo$goodbad <- 1 #good
+foo$goodbad[foo$DistrictCode=="1950" & foo$SchoolCode=="055" | 
+              foo$DistrictCode=="1950" & foo$SchoolCode=="060" | 
+              foo$DistrictCode=="4255" & foo$SchoolCode=="050" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="030" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="050" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="051" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="170" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="190" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="200" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="210" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="230" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="235" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="240" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="260" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="265" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="270" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="300" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="310" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="401"] <- 0
+
+#label missing values as NA
+foo[foo == "N"] <- NA
+foo[foo == "*"] <- NA
+
+#convert all columns to numeric
+foo$CountyCode <- as.numeric(as.character(foo$CountyCode))
+foo$DistrictCode <- as.numeric(as.character(foo$DistrictCode))
+foo$SchoolCode <- as.numeric(as.character(foo$SchoolCode))
+foo$Percent <- as.numeric(as.character(foo$Percent))
+
+#convert race group to numbers
+foo$group <- 1
+foo$group[foo$StudentGroup=="English Learners"] <- 2
+foo$group[foo$StudentGroup=="Homeless Students"] <- 3 
+foo$group[foo$StudentGroup=="Migrant Students"] <- 4 
+foo$group[foo$StudentGroup=="Military-Connected Students"] <- 5 
+foo$group[foo$StudentGroup=="Students in Foster Care"] <- 6 
+foo$group[foo$StudentGroup=="Students with Disabilities"] <- 7 
+
+#convert number to decimal
+foo$Percent <- foo$Percent / 100
+
+#calculate total number of students in each grade 
+foo2 <- group_by(foo, goodbad, group) %>%
+  summarise(
+    meanpercent = mean(Percent, na.rm = TRUE),
+    sepercent=sd(Percent, na.rm = TRUE)/sqrt(length(Percent))
+  )
+
+limits <- aes(ymax = meanpercent + sepercent, ymin=meanpercent - sepercent)
+
+ggplot(foo2,aes(x=factor(group),y=meanpercent,color=factor(goodbad),fill=factor(goodbad)))+
+  geom_bar(stat="identity", position ="dodge")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Student group", y = "Percent of students")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_y_continuous(labels=percent,limits=c(0,.9),breaks=seq(0,.9,.1))+
+  scale_x_discrete(breaks=c("1","2","3","4","5","6","7"),labels=c("EcoDis", "EngLearners","Homeless","Migrant","Military","Foster Care","Disabilities"))+
+  theme(legend.position = "bottom")+
+  theme(text=element_text(family="Times"))+
+  scale_fill_manual(values = c("#bebad9", "#3b6dae"), name="Schools", breaks=c("0","1"), labels=c("Bottom 25%", "Top 25%"))+
+  scale_color_manual(values = c("#bebad9", "#3b6dae"))+
+  geom_errorbar(limits, width=0.25, color="black",position=position_dodge(width=0.9))+
+  guides(color=FALSE)
+```
+
+The bottom 25% have significantly more economically disadvantaged students and more English learners.
+
+Focusing on the less frequent student groups we see that the bottom 25% of schools have more homeless students and students in foster care.
+
+```{r, echo=FALSE, warning=FALSE,fig.width=10}
+foo3 <- subset(foo2, group > 2 & group < 7)
+  
+ggplot(foo3,aes(x=factor(group),y=meanpercent,color=factor(goodbad),fill=factor(goodbad)))+
+  geom_bar(stat="identity", position ="dodge")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Student group", y = "Percent of students")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_y_continuous(labels=percent,limits=c(0,.01),breaks=seq(0,.01,.001))+
+  scale_x_discrete(breaks=c("3","4","5","6"),labels=c("Homeless","Migrant","Military","Foster Care"))+
+  theme(legend.position = "bottom")+
+  theme(text=element_text(family="Times"))+
+  scale_fill_manual(values = c("#bebad9", "#3b6dae"), name="Schools", breaks=c("0","1"), labels=c("Bottom 25%", "Top 25%"))+
+  scale_color_manual(values = c("#bebad9", "#3b6dae"))+
+  geom_errorbar(limits, width=0.25, color="black",position=position_dodge(width=0.9))+
+  guides(color=FALSE)
+```
+
+\newpage
+
+###Languages spoken at home  
+
+```{r, echo=FALSE, warning=FALSE,fig.width=9, fig.height=7}
+#mercer county
+foo <- subset(EnrollmentByHomeLanguage, CountyCode=="21") 
+
+#Keeping only the top and bottom 25% schools
+foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" | 
+                 DistrictCode=="1245" & SchoolCode=="080" |
+                 DistrictCode=="1430" & SchoolCode=="105" | 
+                 DistrictCode=="1950" & SchoolCode=="055" |
+                 DistrictCode=="1950" & SchoolCode=="060" | 
+                 DistrictCode=="1950" & SchoolCode=="210" |
+                 DistrictCode=="1950" & SchoolCode=="225" | 
+                 DistrictCode=="2280" & SchoolCode=="040" |
+                 DistrictCode=="2280" & SchoolCode=="065" | 
+                 DistrictCode=="2280" & SchoolCode=="075" |
+                 DistrictCode=="2580" & SchoolCode=="080" |
+                 DistrictCode=="2580" & SchoolCode=="100" | 
+                 DistrictCode=="3105" & SchoolCode=="301" |
+                 DistrictCode=="4255" & SchoolCode=="050" |
+                 DistrictCode=="4255" & SchoolCode=="080" |
+                 DistrictCode=="4255" & SchoolCode=="110" |
+                 DistrictCode=="5210" & SchoolCode=="030" |
+                 DistrictCode=="5210" & SchoolCode=="050" |
+                 DistrictCode=="5210" & SchoolCode=="051" |
+                 DistrictCode=="5210" & SchoolCode=="170" |
+                 DistrictCode=="5210" & SchoolCode=="190" |
+                 DistrictCode=="5210" & SchoolCode=="200" |
+                 DistrictCode=="5210" & SchoolCode=="210" |
+                 DistrictCode=="5210" & SchoolCode=="230" |
+                 DistrictCode=="5210" & SchoolCode=="235" |
+                 DistrictCode=="5210" & SchoolCode=="240" |
+                 DistrictCode=="5210" & SchoolCode=="260" |
+                 DistrictCode=="5210" & SchoolCode=="265" |
+                 DistrictCode=="5210" & SchoolCode=="270" |
+                 DistrictCode=="5210" & SchoolCode=="300" |
+                 DistrictCode=="5210" & SchoolCode=="310" |
+                 DistrictCode=="5210" & SchoolCode=="401" |
+                 DistrictCode=="5510" & SchoolCode=="030" |
+                 DistrictCode=="5715" & SchoolCode=="020" |
+                 DistrictCode=="5715" & SchoolCode=="025" |
+                 DistrictCode=="5715" & SchoolCode=="035" |
+                 DistrictCode=="5715" & SchoolCode=="040" |
+                 DistrictCode=="5715" & SchoolCode=="140" |
+                 DistrictCode=="5715" & SchoolCode=="150")
+
+#label if schools is good or bad
+foo$goodbad <- 1 #good
+foo$goodbad[foo$DistrictCode=="1950" & foo$SchoolCode=="055" | 
+              foo$DistrictCode=="1950" & foo$SchoolCode=="060" | 
+              foo$DistrictCode=="4255" & foo$SchoolCode=="050" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="030" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="050" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="051" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="170" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="190" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="200" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="210" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="230" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="235" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="240" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="260" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="265" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="270" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="300" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="310" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="401"] <- 0
+
+#label missing values as NA
+foo[foo == "N"] <- NA
+foo[foo == "*"] <- NA
+
+#convert all columns to numeric
+foo$CountyCode <- as.numeric(as.character(foo$CountyCode))
+foo$DistrictCode <- as.numeric(as.character(foo$DistrictCode))
+foo$SchoolCode <- as.numeric(as.character(foo$SchoolCode))
+foo$Percent <- as.numeric(as.character(foo$`%OfStudents`))
+
+#convert group to numbers
+foo$group <- 1 #english
+foo$group[foo$HomeLanguage=="Other"] <- 2
+foo$group[foo$HomeLanguage=="Spanish"] <- 3 
+foo$group[foo$HomeLanguage=="Gujarati"] <- 4 
+foo$group[foo$HomeLanguage=="Hindi"] <- 5 
+foo$group[foo$HomeLanguage=="Telugu"] <- 6 
+foo$group[foo$HomeLanguage=="Urdu"] <- 7 
+foo$group[foo$HomeLanguage=="Haitian"] <- 8 
+foo$group[foo$HomeLanguage=="Creoles and pidgins, French-based"] <- 9 
+foo$group[foo$HomeLanguage=="Arabic"] <- 10 
+foo$group[foo$HomeLanguage=="Chinese"] <- 11 
+foo$group[foo$HomeLanguage=="Japanese"] <- 12 
+foo$group[foo$HomeLanguage=="Polish"] <- 13 
+foo$group[foo$HomeLanguage=="Russian"] <- 14 
+foo$group[foo$HomeLanguage=="French"] <- 15 
+foo$group[foo$HomeLanguage=="Korean"] <- 16 
+foo$group[foo$HomeLanguage=="Italian"] <- 17 
+foo$group[foo$HomeLanguage=="Hebrew"] <- 18 
+foo$group[foo$HomeLanguage=="Tamil"] <- 19 
+
+#convert number to decimal
+foo$Percent <- foo$Percent / 100
+
+#calculate total number of students 
+foo2 <- group_by(foo, goodbad, group) %>%
+  summarise(
+    meanpercent = mean(Percent, na.rm = TRUE),
+    sepercent=sd(Percent, na.rm = TRUE)/sqrt(length(Percent))
+  )
+
+#preparing DFs
+#good
+foo.g <- subset(foo2, goodbad==1)
+foo.g$goodbad <- NULL
+
+newrow1 <- c(8,0,0)
+newrow2 <- c(9,0,0)
+foo.g <- rbind(foo.g[1:7,],newrow1,foo.g[-(1:7),])
+foo.g <- rbind(foo.g[1:8,],newrow2,foo.g[-(1:8),])
+
+#bad 
+foo.b <- subset(foo2, goodbad==0)
+foo.b$goodbad <- NULL
+
+newrow1 <- c(4,0,0)
+newrow2 <- c(5,0,0)
+newrow3 <- c(6,0,0)
+newrow4 <- c(7,0,0)
+newrow5 <- c(10,0,0)
+newrow6 <- c(12,0,0)
+newrow7 <- c(13,0,0)
+newrow8 <- c(14,0,0)
+newrow9 <- c(16,0,0)
+newrow10 <- c(17,0,0)
+newrow11 <- c(18,0,0)
+newrow12 <- c(19,0,0)
+foo.b <- rbind(foo.b[1:3,],newrow1,foo.b[-(1:3),])
+foo.b <- rbind(foo.b[1:4,],newrow2,foo.b[-(1:4),])
+foo.b <- rbind(foo.b[1:5,],newrow3,foo.b[-(1:5),])
+foo.b <- rbind(foo.b[1:6,],newrow4,foo.b[-(1:6),])
+foo.b <- rbind(foo.b[1:9,],newrow5,foo.b[-(1:9),])
+foo.b <- rbind(foo.b[1:11,],newrow6,foo.b[-(1:11),])
+foo.b <- rbind(foo.b[1:12,],newrow7,foo.b[-(1:12),])
+foo.b <- rbind(foo.b[1:13,],newrow8,foo.b[-(1:13),])
+foo.b <- rbind(foo.b,newrow9)
+foo.b <- rbind(foo.b,newrow10)
+foo.b <- rbind(foo.b,newrow11)
+foo.b <- rbind(foo.b,newrow12)
+
+foofinal2 <- rbind(foo.b,foo.g)
+foofinal2$goodbad <- 0
+foofinal2$goodbad[20:38] <- 1
+
+foofinal2$language <- "English" #english
+foofinal2$language[foofinal2$group==2] <- "Other"
+foofinal2$language[foofinal2$group==3] <- "Spanish" 
+foofinal2$language[foofinal2$group==4] <- "Gujarati"
+foofinal2$language[foofinal2$group==5] <- "Hindi" 
+foofinal2$language[foofinal2$group==6] <- "Telugu" 
+foofinal2$language[foofinal2$group==7] <- "Urdu" 
+foofinal2$language[foofinal2$group==8] <- "Haitian" 
+foofinal2$language[foofinal2$group==9] <- "Creoles and pidgins, French-based" 
+foofinal2$language[foofinal2$group==10] <- "Arabic" 
+foofinal2$language[foofinal2$group==11] <- "Chinese" 
+foofinal2$language[foofinal2$group==12] <- "Japanese" 
+foofinal2$language[foofinal2$group==13] <- "Polish" 
+foofinal2$language[foofinal2$group==14] <- "Russian" 
+foofinal2$language[foofinal2$group==15] <- "French" 
+foofinal2$language[foofinal2$group==16] <- "Korean" 
+foofinal2$language[foofinal2$group==17] <- "Italian" 
+foofinal2$language[foofinal2$group==18] <- "Hebrew" 
+foofinal2$language[foofinal2$group==19] <- "Tamil"
+
+limits <- aes(ymax = meanpercent + sepercent, ymin=meanpercent - sepercent)
+
+ggplot(foofinal2,aes(x=factor(group),y=meanpercent,color=factor(goodbad),fill=factor(goodbad)))+
+  geom_bar(stat="identity", position ="dodge")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Language", y = "Percent of students")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_x_discrete(breaks = foofinal2$group, labels = foofinal2$language)+
+  scale_y_continuous(labels=percent,limits=c(0,.9),breaks=seq(0,.9,.1))+
+  theme(legend.position = "bottom")+
+  theme(text=element_text(family="Times"))+
+  scale_fill_manual(values = c("#bebad9", "#3b6dae"), name="Schools", breaks=c("0","1"), labels=c("Bottom 25%", "Top 25%"))+
+  scale_color_manual(values = c("#bebad9", "#3b6dae"))+
+  geom_errorbar(limits, width=0.25, color="black",position=position_dodge(width=0.9))+
+  guides(color=FALSE)+
+  coord_flip()
+```
+
+There are 19 language categories. Majority of the students speak English at home. The other noticeable difference is that the bottom 25% of schools tend to have more students that speak Spanish at home. 
+
+\newpage
+
+###Teacher absenteeism
+
+```{r, echo=FALSE, warning=FALSE,fig.width=10}
+foo <- subset(FacultyAttendance, County_Code=="21") 
+
+#label missing values as NA
+foo[foo == "N"] <- NA
+foo[foo == "*"] <- NA
+
+#convert all columns to numeric
+foo$CountyCode <- as.numeric(as.character(foo$County_Code))
+foo$DistrictCode <- as.numeric(as.character(foo$District_Code))
+foo$SchoolCode <- as.numeric(as.character(foo$School_Code))
+foo$Percent <- as.numeric(as.character(foo$PercentDaysPresent))
+
+#Keeping only the top and bottom 25% schools
+foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" | 
+                 DistrictCode=="1245" & SchoolCode=="080" |
+                 DistrictCode=="1430" & SchoolCode=="105" | 
+                 DistrictCode=="1950" & SchoolCode=="055" |
+                 DistrictCode=="1950" & SchoolCode=="060" | 
+                 DistrictCode=="1950" & SchoolCode=="210" |
+                 DistrictCode=="1950" & SchoolCode=="225" | 
+                 DistrictCode=="2280" & SchoolCode=="040" |
+                 DistrictCode=="2280" & SchoolCode=="065" | 
+                 DistrictCode=="2280" & SchoolCode=="075" |
+                 DistrictCode=="2580" & SchoolCode=="080" |
+                 DistrictCode=="2580" & SchoolCode=="100" | 
+                 DistrictCode=="3105" & SchoolCode=="301" |
+                 DistrictCode=="4255" & SchoolCode=="050" |
+                 DistrictCode=="4255" & SchoolCode=="080" |
+                 DistrictCode=="4255" & SchoolCode=="110" |
+                 DistrictCode=="5210" & SchoolCode=="030" |
+                 DistrictCode=="5210" & SchoolCode=="050" |
+                 DistrictCode=="5210" & SchoolCode=="051" |
+                 DistrictCode=="5210" & SchoolCode=="170" |
+                 DistrictCode=="5210" & SchoolCode=="190" |
+                 DistrictCode=="5210" & SchoolCode=="200" |
+                 DistrictCode=="5210" & SchoolCode=="210" |
+                 DistrictCode=="5210" & SchoolCode=="230" |
+                 DistrictCode=="5210" & SchoolCode=="235" |
+                 DistrictCode=="5210" & SchoolCode=="240" |
+                 DistrictCode=="5210" & SchoolCode=="260" |
+                 DistrictCode=="5210" & SchoolCode=="265" |
+                 DistrictCode=="5210" & SchoolCode=="270" |
+                 DistrictCode=="5210" & SchoolCode=="300" |
+                 DistrictCode=="5210" & SchoolCode=="310" |
+                 DistrictCode=="5210" & SchoolCode=="401" |
+                 DistrictCode=="5510" & SchoolCode=="030" |
+                 DistrictCode=="5715" & SchoolCode=="020" |
+                 DistrictCode=="5715" & SchoolCode=="025" |
+                 DistrictCode=="5715" & SchoolCode=="035" |
+                 DistrictCode=="5715" & SchoolCode=="040" |
+                 DistrictCode=="5715" & SchoolCode=="140" |
+                 DistrictCode=="5715" & SchoolCode=="150")
+
+#label if schools is good or bad
+foo$goodbad <- 1 #good
+foo$goodbad[foo$DistrictCode=="1950" & foo$SchoolCode=="055" | 
+              foo$DistrictCode=="1950" & foo$SchoolCode=="060" | 
+              foo$DistrictCode=="4255" & foo$SchoolCode=="050" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="030" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="050" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="051" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="170" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="190" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="200" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="210" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="230" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="235" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="240" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="260" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="265" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="270" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="300" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="310" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="401"] <- 0
+
+#convert number to decimal
+foo$Percent <- foo$Percent / 100
+
+#calculate total number of students in each grade 
+foo2 <- group_by(foo, goodbad) %>%
+  summarise(
+    meanpercent = mean(Percent, na.rm = TRUE),
+    sepercent=sd(Percent, na.rm = TRUE)/sqrt(length(Percent))
+  )
+
+limits <- aes(ymax = meanpercent + sepercent, ymin=meanpercent - sepercent)
+
+ggplot(foo2,aes(x=factor(goodbad),y=meanpercent,color=factor(goodbad),fill=factor(goodbad)))+
+  geom_bar(stat="identity", position ="dodge")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Schools", y = "Percent of days faculty were present")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_y_continuous(labels=percent)+
+  theme(legend.position = "bottom")+
+  theme(text=element_text(family="Times"))+
+  scale_fill_manual(values = c("#bebad9", "#3b6dae"), name="Schools", breaks=c("0","1"), labels=c("Bottom 25%", "Top 25%"))+
+  scale_color_manual(values = c("#bebad9", "#3b6dae"))+
+  geom_errorbar(limits, width=0.25, color="black",position=position_dodge(width=0.9))+
+  guides(color=FALSE)
+```
+
+The two quartiles have same percentage of teacher attendance. Teachers overall don't miss a lot of school.
+\newpage
+
+###Student to Staff Ratio
+
+```{r, echo=FALSE, warning=FALSE,fig.width=10}
+#Mercer county
+foo <- subset(StudentToStaffRatios, COUNTY_CODE == "21")
+
+#label missing values as NA
+foo[foo == "N"] <- NA
+foo[foo == "*"] <- NA
+
+#remove last 2 character from column :1
+foo$TeacherRatio <- substr(foo$TeacherRatio,1,nchar(foo$TeacherRatio)-2)
+foo$AdministratorsRatio <- substr(foo$AdministratorsRatio,1,nchar(foo$AdministratorsRatio)-2)
+
+#convert all columns to numeric
+foo$CountyCode <- as.numeric(as.character(foo$COUNTY_CODE))
+foo$DistrictCode <- as.numeric(as.character(foo$DISTRICT_CODE))
+foo$SchoolCode <- as.numeric(as.character(foo$SCHOOL_CODE))
+foo$TeacherRatio <- as.numeric(as.character(foo$TeacherRatio))
+foo$AdministratorsRatio <- as.numeric(as.character(foo$AdministratorsRatio))
+
+#Keeping only the top and bottom 25% schools
+foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" | 
+                 DistrictCode=="1245" & SchoolCode=="080" |
+                 DistrictCode=="1430" & SchoolCode=="105" | 
+                 DistrictCode=="1950" & SchoolCode=="055" |
+                 DistrictCode=="1950" & SchoolCode=="060" | 
+                 DistrictCode=="1950" & SchoolCode=="210" |
+                 DistrictCode=="1950" & SchoolCode=="225" | 
+                 DistrictCode=="2280" & SchoolCode=="040" |
+                 DistrictCode=="2280" & SchoolCode=="065" | 
+                 DistrictCode=="2280" & SchoolCode=="075" |
+                 DistrictCode=="2580" & SchoolCode=="080" |
+                 DistrictCode=="2580" & SchoolCode=="100" | 
+                 DistrictCode=="3105" & SchoolCode=="301" |
+                 DistrictCode=="4255" & SchoolCode=="050" |
+                 DistrictCode=="4255" & SchoolCode=="080" |
+                 DistrictCode=="4255" & SchoolCode=="110" |
+                 DistrictCode=="5210" & SchoolCode=="030" |
+                 DistrictCode=="5210" & SchoolCode=="050" |
+                 DistrictCode=="5210" & SchoolCode=="051" |
+                 DistrictCode=="5210" & SchoolCode=="170" |
+                 DistrictCode=="5210" & SchoolCode=="190" |
+                 DistrictCode=="5210" & SchoolCode=="200" |
+                 DistrictCode=="5210" & SchoolCode=="210" |
+                 DistrictCode=="5210" & SchoolCode=="230" |
+                 DistrictCode=="5210" & SchoolCode=="235" |
+                 DistrictCode=="5210" & SchoolCode=="240" |
+                 DistrictCode=="5210" & SchoolCode=="260" |
+                 DistrictCode=="5210" & SchoolCode=="265" |
+                 DistrictCode=="5210" & SchoolCode=="270" |
+                 DistrictCode=="5210" & SchoolCode=="300" |
+                 DistrictCode=="5210" & SchoolCode=="310" |
+                 DistrictCode=="5210" & SchoolCode=="401" |
+                 DistrictCode=="5510" & SchoolCode=="030" |
+                 DistrictCode=="5715" & SchoolCode=="020" |
+                 DistrictCode=="5715" & SchoolCode=="025" |
+                 DistrictCode=="5715" & SchoolCode=="035" |
+                 DistrictCode=="5715" & SchoolCode=="040" |
+                 DistrictCode=="5715" & SchoolCode=="140" |
+                 DistrictCode=="5715" & SchoolCode=="150")
+
+#label if schools is good or bad
+foo$goodbad <- 1 #good
+foo$goodbad[foo$DistrictCode=="1950" & foo$SchoolCode=="055" | 
+              foo$DistrictCode=="1950" & foo$SchoolCode=="060" | 
+              foo$DistrictCode=="4255" & foo$SchoolCode=="050" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="030" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="050" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="051" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="170" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="190" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="200" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="210" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="230" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="235" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="240" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="260" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="265" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="270" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="300" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="310" | 
+              foo$DistrictCode=="5210" & foo$SchoolCode=="401"] <- 0
+
+#calculate total number of students in each grade 
+foo2 <- group_by(foo, goodbad) %>%
+  summarise(
+    meanTeacherPercent = mean(TeacherRatio, na.rm = TRUE),
+    seTeacherPercent=sd(TeacherRatio, na.rm = TRUE)/sqrt(length(TeacherRatio)),
+    meanAdminPercent = mean(AdministratorsRatio, na.rm = TRUE),
+    seAdminPercent=sd(AdministratorsRatio, na.rm = TRUE)/sqrt(length(AdministratorsRatio))    
+  )
+
+#Teachers
+foo3 <- foo2[,1:3]
+  
+limits <- aes(ymax = meanTeacherPercent + seTeacherPercent, ymin=meanTeacherPercent - seTeacherPercent)
+
+ggplot(foo3,aes(x=factor(goodbad),y=meanTeacherPercent,color=factor(goodbad),fill=factor(goodbad)))+
+  geom_bar(stat="identity", position ="dodge")+
+  ggtitle("\n\nTeachers")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Schools", y = "Number of students per teachers")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(legend.position = "none")+
+  theme(text=element_text(family="Times"))+
+  scale_y_continuous(limits=c(0,13),breaks=seq(0,13,1))+
+  scale_x_discrete(breaks=c("0","1"),labels=c("Bottom 25%", "Top 25%"))+
+  scale_fill_manual(values = c("#bebad9", "#3b6dae"))+
+  scale_color_manual(values = c("#bebad9", "#3b6dae"))+
+  geom_errorbar(limits, width=0.25, color="black",position=position_dodge(width=0.9))
+```
+
+```{r, echo=FALSE, warning=FALSE,fig.width=10}
+#Admins
+foo3 <- foo2[,c(1,4,5)]
+  
+limits <- aes(ymax = meanAdminPercent + seAdminPercent, ymin=meanAdminPercent - seAdminPercent)
+
+ggplot(foo3,aes(x=factor(goodbad),y=meanAdminPercent,color=factor(goodbad),fill=factor(goodbad)))+
+  geom_bar(stat="identity", position ="dodge")+
+  ggtitle("\n\nAdministrators")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Schools", y = "Number of students per administrators")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(text=element_text(family="Times"))+
+  scale_y_continuous(limits=c(0,500),breaks=seq(0,500,50))+
+  scale_x_discrete(breaks=c("0","1"),labels=c("Bottom 25%", "Top 25%"))+
+  scale_fill_manual(values = c("#bebad9", "#3b6dae"))+
+  scale_color_manual(values = c("#bebad9", "#3b6dae"))+
+  geom_errorbar(limits, width=0.25, color="black",position=position_dodge(width=0.9))+
+  theme(legend.position = "none")
+```
+
+The student:teacher ratio, and student:administrator ratio, looks relatively similar.
+
+\newpage
+
+## Summary
+The most obvious differences between the bottom 25% of schools and top 25% of schools in terms of chronic absenteeism seems to be in the grade composition, ethnicity of students, and percentage of students that are economically disadvantaged.  
+
+Specifically, bottom 25% of schools have more students in older grades (9-12), whereas top 25% of schools have more students in middle school grade (6-8).  
+
+Furthermore, bottom 25% of schools have significantly less Asian, significantly more Black, significantly more Hispanic, less mixed race and significantly less White students.  
+
+Lastly, the bottom 25% have significantly more economically disadvantaged students and more
+English learners.  

@@ -1,8 +1,9 @@
 ---
 title: "Chronic Absenteeism"
 author: "Felicia Zhang"
-date: '2018-01-24'
-output: html_document
+date: '2018-05-15'
+output:
+  html_document: default
 ---
 
 ```{r setup, include=FALSE, warning=FALSE}
@@ -21,6 +22,7 @@ library(broom)
 library(tidyr)
 library(wesanderson)
 library(readxl)    
+library(extrafont)
 
 #LOAD MULTIPLE EXCEL SHEETS INTO SEPARATE DFS
 
@@ -39,9 +41,8 @@ names(lst) <- sheets
 list2env(lst, envir = .GlobalEnv)
 ```
 
-
 ```{r, echo=FALSE, warning=FALSE}
-#Create Chronic Absenteeism percent for each grade, each school, and each district
+###Create Chronic Absenteeism percent for each grade, each school, and each district
 
 #*SchoolPercent is n of students absent/n of students in the grade NOT n of students absent/n of students in the school -_-
   
@@ -105,7 +106,15 @@ AbsentDistrict <- group_by(Absentgrade,CountyCode,DistrictCode) %>%
   )
 ```
 
-## Chronic absenteeism by Grade
+##### Important information
+
+Outcome = chronic absenteeism.  
+* We have 4 ways of looking at it: county, district, school, grade  
+Predictors = demographics, grades, course enrollment, negative behavior, postsecondary, school  
+
+##### Graph information
+Each dot is a school
+
 ```{r, echo=FALSE, warning=FALSE}
 poo <- Absentgrade
 
@@ -126,19 +135,21 @@ ggplot(poo.final,aes(x=factor(Grade),y=meanPercentabsent,color=factor(Grade),fil
   geom_bar(stat="identity")+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nChronic absenteeism rate by grade")+
   labs(x = "Grade", y = "Chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_y_continuous(labels=percent,limits=c(0,.3),breaks=seq(0,.3,.05))+
   scale_x_discrete(breaks=c("-1","0","1","2","3","4","5","6","7","8","9","10","11","12"),labels=c("PK", "KG","1","2","3","4","5","6","7","8","9","10","11","12"))+
   theme(legend.position = "none")+
-  geom_errorbar(limits, width=0.25,color="black")
+  geom_errorbar(limits, width=0.25,color="black")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(text=element_text(family="Century"))
 ```
 
-## Chronic absenteeism by County
 ```{r, echo=FALSE, warning=FALSE}
 poo <- na.omit(Absentgrade)
 
@@ -151,17 +162,18 @@ ggplot(AbsentCounty,aes(x=factor(CountyCode),y=percentabsent,color=factor(County
   geom_bar(stat="identity")+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nChronic absenteeism rate by county")+
   labs(x = "County", y = "Chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_y_continuous(labels=percent,limits=c(0,.2),breaks=seq(0,.2,.05))+
-  theme(legend.position = "none")
+  theme(legend.position = "none")+
+  theme(text=element_text(family="Century"))
 ```
 
-Student to staff ratio on chronic absenteeism
 ```{r, echo=FALSE, warning=FALSE}
 #PREPARE StudentToStaffRatios DF
 #keeping columns: county code, district code, school code, teacher ratio, admin ratio
@@ -190,39 +202,40 @@ poo.final <- merge(AbsentSchool, poo, by=c("CountyCode","DistrictCode","SchoolCo
 #remove NA
 pooNArm <- na.omit(poo.final)
 
-ggplot(pooNArm,aes(x=TeacherRatio,y=percentabsent,color=factor(CountyCode),fill=factor(CountyCode)))+
+ggplot(pooNArm,aes(x=TeacherRatio,y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  ggtitle("Student to Teacher ratio per school")+
-  labs(x = "Student:Teacher Ratio", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nStudent to Teacher ratio and chronic absenteeism")+
+  labs(x = "Student:Teacher Ratio", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.1))+
-  guides(color=FALSE,fill=FALSE)
+  guides(color=FALSE,fill=FALSE)+
+  theme(text=element_text(family="Century"))
 
 #remove NA: adminstrator
 pooNArm <- na.omit(poo.final)
-ggplot(pooNArm,aes(x=AdministratorsRatio,y=percentabsent,color=factor(CountyCode),fill=factor(CountyCode)))+
+ggplot(pooNArm,aes(x=AdministratorsRatio,y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  ggtitle("Student to Administrators ratio per school")+
-  labs(x = "Student:Staff Ratio", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nStudent to Administrator ratio and chronic absenteeism")+
+  labs(x = "Student:Administrator ratio", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.1))+
-  guides(color=FALSE,fill=FALSE)
+  guides(color=FALSE,fill=FALSE)+
+  theme(text=element_text(family="Century"))
 ```
 
-Ethnicity on chronic absenteeism
-```{r, echo=FALSE, warning=FALSE}
+```{r, echo=FALSE, warning=FALSE, fig.width = 7, fig.height=10}
 #PREPARE StudentToStaffRatios DF
 #keeping columns: county code, district code, school code, teacher ratio, admin ratio
 poo <- EnrollmentByRacialEthnicGroup
@@ -255,28 +268,47 @@ poo.final$percent2 <- poo.final$Percent/100
 ##########
 #remove NA
 pooNArm <- na.omit(poo.final)
-
+pooNArm$percent2 <- round(pooNArm$percent2, 2)
 label <- c(`1` = "American Indian or Alaska Native",`2` = "Asian",`3` = "Black or African American",`4` = "Hispanic",`5` = "Native Hawaiian or Pacific Islander",`6` = "Two or More Races",`7` = "White")
 
 ggplot(pooNArm,aes(x=percent2,y=percentabsent,color=factor(ethnic),fill=factor(ethnic)))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  ggtitle("Teacher Avg Years Exp In School on chronic absenteeism")+
-  labs(x = "Percent of ethnic group", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nEthnicity and chronic absenteeism")+
+  labs(x = "Percent of ethnic group", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
   scale_x_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
-  stat_smooth(method="lm")+
-  facet_wrap(~ethnic, ncol=2,labeller = as_labeller(label))
-  
+  facet_wrap(~ethnic, ncol=2,labeller = as_labeller(label))+
+  theme(text=element_text(family="Century"))+
+  theme(legend.position = "none")
+
+#remove 0s
+poo2 <- subset(pooNArm, percent2 > 0)
+
+ggplot(poo2,aes(x=percent2,y=percentabsent,color=factor(ethnic),fill=factor(ethnic)))+
+  geom_point()+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nEthnicity and chronic absenteeism (removed 0s)")+
+  labs(x = "Percent of ethnic group", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  scale_x_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  facet_wrap(~ethnic, ncol=2,labeller = as_labeller(label))+
+  theme(text=element_text(family="Century"))+
+  theme(legend.position = "none")
 ```
 
-Gender on chronic absenteeism
 ```{r, echo=FALSE, warning=FALSE}
 #PREPARE DF, only keep male or female
 poo <- subset(EnrollmentTrendsByStudentGroup, StudentGroup == "Male" | StudentGroup == "Female")
@@ -311,23 +343,22 @@ ggplot(pooNArm,aes(x=percent2,y=percentabsent,color=factor(gender),fill=factor(g
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "Percent of gender", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nGender and chronic absenteeism")+
+  labs(x = "Percent", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
   scale_x_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
   facet_wrap(~gender, ncol=2,labeller = as_labeller(label))+
-  theme(strip.text = element_text(size=16))+
-  theme(legend.position="none")
-  
+  theme(strip.text = element_text(size=14))+
+  theme(legend.position="none")+
+  theme(text=element_text(family="Century"))
 ```
 
-Student Group on chronic absenteeism
-```{r, echo=FALSE, warning=FALSE}
-#PREPARE StudentToStaffRatios DF
+```{r, echo=FALSE, warning=FALSE, fig.width=7, fig.height=10}
 #Economically Disadvantaged Students, English Learners, Homeless Students, Migrant Students, Students in Foster Care, Military-Connected Students, Students with Disabilities
 poo <- subset(EnrollmentTrendsByStudentGroup, StudentGroup != "Male" & StudentGroup != "Female")
 
@@ -366,20 +397,21 @@ ggplot(pooNArm,aes(x=percent2,y=percentabsent,color=factor(group),fill=factor(gr
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "Percent of student group", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nStudent group and chronic absenteeism")+
+  labs(x = "Percent", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
   scale_x_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
   facet_wrap(~group, ncol=2,labeller = as_labeller(label))+
-  theme(legend.position="none")
+  theme(legend.position="none")+
+  theme(text=element_text(family="Century"))
   
 ```
 
-ELA Literacy performance on chronic absenteeism
 ```{r, echo=FALSE, warning=FALSE}
 poo <- ELALiteracyPerformanceByGrade
 
@@ -413,16 +445,17 @@ ggplot(pooNArm,aes(x=ELAScore,y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "ELA Score", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nELA performance and chronic absenteeism")+
+  labs(x = "ELA Score", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
-  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))
+  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  theme(text=element_text(family="Century"))
 ```
 
-Math scores on chronic absenteeism
 ```{r, echo=FALSE, warning=FALSE}
 ###########################2. Math Scores
 poo <- MathPerformanceByGradeTest
@@ -457,16 +490,17 @@ ggplot(pooNArm,aes(x=MathScore,y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "Math Score", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nMath score and chronic absenteeism")+
+  labs(x = "Math Score", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
-  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))
+  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  theme(text=element_text(family="Century"))
 ```
 
-English Language Proficiency Test on chronic absenteeism
 ```{r, echo=FALSE, warning=FALSE}
 #################3. English Language Proficiency Test
 poo <- EnglishLanguageProficiencyTest
@@ -509,18 +543,18 @@ ggplot(pooNArm,aes(x=EngProfTest.Below,y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "Percent below proficiency (scored below 4.5)", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nEnglish Language Proficiency Test and chronic absenteeism")+
+  labs(x = "Percent below proficiency (i.e. below 4.5)", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
-  scale_x_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))
+  scale_x_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  theme(text=element_text(family="Century"))
 ```
 
-Biology grades on chronic absenteeism **
-Looks like we might have something here
 ```{r, echo=FALSE, warning=FALSE}
 #####################4. Biology
 #only care about percentage in terms of entire school population
@@ -558,14 +592,16 @@ ggplot(pooNArm,aes(x=PercentBelowProfBio,y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "Percent of students below Biology proficiency level", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nBiology proficiency and chronic absenteeism")+
+  labs(x = "Percent of students below Biology proficiency level", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
-  scale_x_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))
+  scale_x_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  theme(text=element_text(family="Century"))
   
 #remove 0%
 poo.final <- subset(pooNArm, PercentBelowProfBio > 0)
@@ -574,17 +610,21 @@ ggplot(poo.final,aes(x=PercentBelowProfBio,y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "Percent of students below Biology proficiency level", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nBiology proficiency and chronic absenteeism (removing 0s)")+
+  labs(x = "Percent of students below Biology proficiency level", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
-  scale_x_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))
+  scale_x_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  theme(text=element_text(family="Century"))
+
+#Biology grades on chronic absenteeism **
+#Looks like we might have something here
 ```
 
-Incidence on chronic absenteeism 
 ```{r, echo=FALSE, warning=FALSE}
 #Violence Vandalism HIB Susbtance
 #only care about percentage in terms of entire school population
@@ -613,91 +653,105 @@ ggplot(pooNArm,aes(x=Violence,y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "Number of Violence Incidents", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nViolence and chronic absenteeism")+
+  labs(x = "Number of Violence Incidents", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
-  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))
-  
+  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  theme(text=element_text(family="Century"))
+
 #vandalism
 ggplot(pooNArm,aes(x=Vandalism,y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "Number of Vandalism Incidents", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nVandalism and chronic absenteeism")+
+  labs(x = "Number of Vandalism Incidents", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
-  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))
+  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  theme(text=element_text(family="Century"))
 
-#violence
+#weapons
 ggplot(pooNArm,aes(x=Weapons,y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "Number of Weapons Incidents", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nWeapons and chronic absenteeism")+
+  labs(x = "Number of Weapons Incidents", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
-  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))
+  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  theme(text=element_text(family="Century"))
 
-#violence
+#substance
 ggplot(pooNArm,aes(x=Substances,y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "Number of Substances Incidents", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nSubstance and chronic absenteeism")+
+  labs(x = "Number of Substances Incidents", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
-  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))
+  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  theme(text=element_text(family="Century"))
 
 #Harassment, Intimidation, Bullying (HIB)
 ggplot(pooNArm,aes(x=`Harassment, Intimidation, Bullying (HIB)`,y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "Number of HIB Incidents", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nHarassment, Intimidation, Bullying (HIB) and chronic absenteeism")+
+  labs(x = "Number of HIB Incidents", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
-  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))
+  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  theme(text=element_text(family="Century"))
 
 #`Total Unique Incidents`
 ggplot(pooNArm,aes(x=`Total Unique Incidents`,y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "Number of Total Unique Incidents", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nTotal Unique Incidents and chronic absenteeism")+
+  labs(x = "Number of Total Unique Incidents", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
-  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))
+  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  theme(text=element_text(family="Century"))
 
 #`Incidents Per 100 Students Enrolled`
 ggplot(pooNArm,aes(x=`Incidents Per 100 Students Enrolled`,y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "Incidents Per 100 Students Enrolled", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nRate of Incidents and chronic absenteeism")+
+  labs(x = "Incidents Per 100 Students Enrolled", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
-  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))
+  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  theme(text=element_text(family="Century"))
 
 #remove 0s 
 poo2 <- subset(pooNArm, `Incidents Per 100 Students Enrolled` > 0)
@@ -705,18 +759,19 @@ ggplot(poo2,aes(x=`Incidents Per 100 Students Enrolled`,y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "Incidents Per 100 Students Enrolled", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nRate of Incidents and chronic absenteeism (removed 0s)")+
+  labs(x = "Incidents Per 100 Students Enrolled", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
-  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))
+  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  theme(text=element_text(family="Century"))
 ```
 
-Student suspension on chronic absenteeism
 ```{r, echo=FALSE, warning=FALSE}
-#################3. English Language Proficiency Test
+#####student suspension
 poo <- StudentSuspensionRates
 
 #label missing values as NA
@@ -742,20 +797,21 @@ ggplot(pooNArm,aes(x=StudentSuspensionRate,y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "Student Suspension Rate", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nStudent suspension and chronic absenteeism")+
+  labs(x = "Student Suspension Rate", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
-  scale_x_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))
+  scale_x_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  theme(text=element_text(family="Century"))
 
 ```
 
-Drop out rate on chronic absenteeism
 ```{r, echo=FALSE, warning=FALSE}
-#################3. English Language Proficiency Test
+###Drop out rates
 poo <- subset(DropoutRateTrends, SchoolYear=="2016-2017")
 
 #label missing values as NA
@@ -786,20 +842,20 @@ ggplot(pooNArm,aes(x=SchoolRate,y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "Drop out Rate", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nDrop out rate and chronic absenteeism")+
+  labs(x = "Drop out rate", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
-  scale_x_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))
+  scale_x_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  theme(text=element_text(family="Century"))
 
 ```
 
-Graduation rate on chronic absenteeism ** 
 ```{r, echo=FALSE, warning=FALSE}
-
 poo <- GraduationRates[c(1:5)]
 poo2 <- subset(poo, StudentGroup=="Schoolwide")
 
@@ -831,35 +887,38 @@ ggplot(pooNArm,aes(x=`School-Class of 2017: 4-Year Rate`,y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "Class of 2017 Graduation Rate", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nClass of 2017 Graduation Rate and chronic absenteeism")+
+  labs(x = "Graduation Rate", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
-  scale_x_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))
+  scale_x_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  theme(text=element_text(family="Century"))
 
+#removing 100% graduation rate schools
 poo1 <- subset(pooNArm, `School-Class of 2017: 4-Year Rate` < 1)
 
 ggplot(poo1,aes(x=`School-Class of 2017: 4-Year Rate`,y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "Class of 2017 Graduation Rate", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nClass of 2017 Graduation Rate on chronic absenteeism (removing 1s)")+
+  labs(x = "Graduation Rate", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
-  scale_x_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))
-
+  scale_x_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  theme(text=element_text(family="Century"))
 ```
 
-Postseondary enrollment fall after graduation on chronic absenteeism *
 ```{r, echo=FALSE, warning=FALSE}
-
+#Postseondary enrollment fall after graduation on chronic absenteeism ***
 poo <- PostsecondaryEnrRatesFall[c(1:5)]
 poo2 <- subset(poo, StudentGroup=="Schoolwide")
 
@@ -891,19 +950,21 @@ ggplot(pooNArm,aes(x=EnrolledPercent, y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "Percent enrolled in postsecondary education by Fall after grad", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nPercent enrolled in postsecondary education and chronic absenteeism")+
+  labs(x = "Percent enrolled in postsecondary education by Fall after grad", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
-  scale_x_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))
+  scale_x_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  theme(text=element_text(family="Century"))
 
 ```
 
-SAT scores on chronic absenteeism*
 ```{r, echo=FALSE, warning=FALSE}
+###SAT SCORES
 poo <- `PSAT-SAT-ACTPerformance`[c(1:6)]
 poo2 <- subset(poo, Test=="SAT")
 
@@ -942,19 +1003,21 @@ ggplot(pooNArm,aes(x=School_Avg, y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "SAT Score", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nSAT Scores and chronic absenteeism")+
+  labs(x = "SAT Score", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
   facet_wrap(~subject2,labeller = as_labeller(label))+
-  theme(strip.text = element_text(size=16))
+  theme(strip.text = element_text(size=14))+
+  theme(text=element_text(family="Century"))
 ```
 
-ACT scores on chronic absenteeism
 ```{r, echo=FALSE, warning=FALSE}
+####ACT scores on chronic absenteeism
 poo <- `PSAT-SAT-ACTPerformance`[c(1:6)]
 poo2 <- subset(poo, Test=="ACT")
 
@@ -995,19 +1058,21 @@ ggplot(pooNArm,aes(x=School_Avg, y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "ACT Score", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nACT Scores and chronic absenteeism")+
+  labs(x = "ACT Score", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
   facet_wrap(~subject2,labeller = as_labeller(label))+
-  theme(strip.text = element_text(size=16))
+  theme(strip.text = element_text(size=14))+
+  theme(text=element_text(family="Century"))
 ```
 
-PSAT scores on chronic absenteeism
 ```{r, echo=FALSE, warning=FALSE}
+#####PSAT SCORES
 poo <- `PSAT-SAT-ACTPerformance`[c(1:6)]
 poo2 <- subset(poo, Test=="PSAT")
 
@@ -1046,20 +1111,21 @@ ggplot(pooNArm,aes(x=School_Avg, y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "PSAT Score", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nPSAT Scores and chronic absenteeism")+
+  labs(x = "PSAT Score", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
   facet_wrap(~subject2,labeller = as_labeller(label))+
-  theme(strip.text = element_text(size=16))
+  theme(strip.text = element_text(size=14))+
+  theme(text=element_text(family="Century"))
 ```
 
-Teacher experience on chronic absenteeism
 ```{r, echo=FALSE, warning=FALSE}
-#PREPARE StudentToStaffRatios DF
+#Teacher experience on chronic absenteeism
 #keeping columns: county code, district code, school code, teacher ratio, admin ratio
 poo <- TeachersExperienceCertification[,c(1:6)]
 
@@ -1084,23 +1150,25 @@ poo.final <- merge(AbsentSchool, poo, by=c("CountyCode","DistrictCode","SchoolCo
 ##########
 #remove NA
 pooNArm <- na.omit(poo.final)
-ggplot(pooNArm,aes(x=TeacherAvgYearsExpInSchool,y=percentabsent,color=factor(CountyCode),fill=factor(CountyCode)))+
+ggplot(pooNArm,aes(x=TeacherAvgYearsExpInSchool,y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  ggtitle("Teacher Avg Years Exp In School")+
-  labs(x = "Teacher Avg Years Exp In School", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nTeacher Exp In School and chronic absenteeism")+
+  labs(x = "Teacher Avg Years Exp In School", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.1))+
-  guides(color=FALSE,fill=FALSE)
+  guides(color=FALSE,fill=FALSE)+
+  theme(text=element_text(family="Century"))
 ```
 
-Teacher's level of education on chronic absenteeism
-```{r, echo=FALSE, warning=FALSE}
+
+```{r, echo=FALSE, warning=FALSE, fig.width = 10, fig.height=6}
+#Teacher's level of education on chronic absenteeism
 poo <- TeachersAdminsLevelOfEducation
 poo2 <- subset(poo, `Teachers/Admins`== "Teachers")
 
@@ -1141,20 +1209,22 @@ ggplot(pooNArm,aes(x=HighestLevelEdPct, y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "Percent", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nTeacher's level of education and chronic absenteeism")+
+  labs(x = "Percent", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
   scale_x_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
   facet_wrap(~education,labeller = as_labeller(label))+
-  theme(strip.text = element_text(size=16))
+  theme(strip.text = element_text(size=14))+
+  theme(text=element_text(family="Century"))
 ```
 
-Length of school day on chronic absenteeism.. work on this
-```{r, echo=FALSE, warning=FALSE}
+```{r, echo=FALSE, warning=FALSE, include=FALSE}
+#Length of school day on chronic absenteeism.. work on this
 poo <- SchoolDay[,c(1:5)]
 
 #convert time to time format
@@ -1186,11 +1256,13 @@ ggplot(pooNArm,aes(x=lengthofday, y=percentabsent))+
   geom_point()+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "Length of days (Hr:Mins)", y = "School chronic absenteeism rate")+
-  theme(plot.title = element_text(face="bold", size=20, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=20))+ 
+  ggtitle("\n\nLength of school day and chronic absenteeism")+
+  labs(x = "Length of days (Hr:Mins)", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
-  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))
+  scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  theme(text=element_text(family="Century"))
 ```

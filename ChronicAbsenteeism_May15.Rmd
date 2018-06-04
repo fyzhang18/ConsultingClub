@@ -1,0 +1,511 @@
+---
+title: "Chronic Absenteeism"
+author: "Felicia Zhang"
+date: '2018-05-15'
+output:
+html_document: default
+---
+
+```{r setup, include=FALSE, warning=FALSE}
+library(ggplot2) 
+library(zoo)
+library(reshape)
+library(plyr)
+library(dplyr)
+library(scales) 
+library(data.table)
+library(signal)
+library(matrixStats)
+library(lme4)
+library(arm)
+library(broom)
+library(tidyr)
+library(wesanderson)
+library(readxl)    
+library(extrafont)
+
+#LOAD MULTIPLE EXCEL SHEETS INTO SEPARATE DFS
+
+#get names of sheets
+sheets <- readxl::excel_sheets("~/Documents/Felicia Zhang/Felicia/Princeton/ConsultingClub/PerformanceReportsSchoolData_SY1617_FZ.xlsx")
+
+#load in excel data as 1 big file
+lst <- lapply(sheets, function(sheet) 
+  readxl::read_excel("~/Documents/Felicia Zhang/Felicia/Princeton/ConsultingClub/PerformanceReportsSchoolData_SY1617_FZ.xlsx", sheet = sheet)
+)
+
+#prepare names
+names(lst) <- sheets
+
+#turn it into DF
+list2env(lst, envir = .GlobalEnv)
+```
+
+```{r, echo=FALSE, warning=FALSE, include=FALSE}
+###Create Chronic Absenteeism percent for each grade, each school, and each district
+
+#*SchoolPercent is n of students absent/n of students in the grade NOT n of students absent/n of students in the school -_-
+
+poo <- EnrollmentTrendsByGrade
+
+#remove ungraded and Total Enrollment
+poo <- poo[!(poo$Grade=="Ungraded"),]
+poo <- poo[!(poo$Grade=="Total Enrollment"),]
+
+#remove the word Grade from beginning
+poo$Grade <- substring(poo$Grade, 7)
+
+#reformat poo Grade (it's written as 07 instead of 7)
+poo$Grade[poo$Grade=="01"] <- "1"
+poo$Grade[poo$Grade=="02"] <- "2"
+poo$Grade[poo$Grade=="03"] <- "3"
+poo$Grade[poo$Grade=="04"] <- "4"
+poo$Grade[poo$Grade=="05"] <- "5"
+poo$Grade[poo$Grade=="06"] <- "6"
+poo$Grade[poo$Grade=="07"] <- "7"
+poo$Grade[poo$Grade=="08"] <- "8"
+poo$Grade[poo$Grade=="09"] <- "9"
+
+poo2 <- ChronicAbsByGrade
+
+#combine the 2
+AbsentGrade <- merge(poo, poo2, by=c("CountyCode","DistrictCode","SchoolCode","Grade")) # NA's match
+
+#relabel SchoolPercent to GradePercent
+names(AbsentGrade)[5]<-"NumofStudents"
+names(AbsentGrade)[6]<-"GradePercent"
+
+#replace grades with numeric
+AbsentGrade$Grade[AbsentGrade$Grade=="PK"] <- "-1"
+AbsentGrade$Grade[AbsentGrade$Grade=="KG"] <- "0"
+
+#label missing values as NA
+AbsentGrade[AbsentGrade == "N"] <- NA
+AbsentGrade[AbsentGrade == "*"] <- NA
+
+#convert all columns to numeric
+AbsentGrade[] <- lapply(AbsentGrade, function(x) as.numeric(as.character(x)))
+
+#convert GradePercent to decimal
+AbsentGrade$GradePercent <- AbsentGrade$GradePercent/100
+
+#calculate Number of students absent using total number of students * percent absent
+AbsentGrade$NumStudentsAbsent <- AbsentGrade$NumofStudents * AbsentGrade$GradePercent
+AbsentGrade$NumStudentsAbsent <- round(AbsentGrade$NumStudentsAbsent)
+
+#get percent absent for each school
+AbsentSchool <- group_by(AbsentGrade,CountyCode,DistrictCode,SchoolCode) %>%
+  summarise(
+    percentabsent = sum(NumStudentsAbsent) / sum(NumofStudents)
+  )
+
+#get percent absent for each district
+AbsentDistrict <- group_by(AbsentGrade,CountyCode,DistrictCode) %>%
+  summarise(
+    percentabsent = sum(NumStudentsAbsent) / sum(NumofStudents)
+  )
+```
+
+### To get a sense of the data, lets look at the distribution of chronic absenteeism rate
+```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.width=7, fig.height=8}
+#histogram of school absenteeism rate 
+#to see min, max, what’s the most common rate
+#color by county
+poo <- na.omit(AbsentSchool)
+
+ggplot(poo, aes(percentabsent, fill=factor(CountyCode)))+
+  geom_histogram(binwidth = 0.01)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nHistogram of school chronic absenteeism rate")+
+  labs(x = "Chronic absenteeism rate", y = "Count")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_x_continuous(labels=percent,limits=c(-0.1,1),breaks=seq(-0.1,1,.1))+
+  theme(legend.position = "bottom")+
+  theme(text=element_text(family="Century"))+
+  guides(fill=guide_legend(title="County"))
+```
+
+```{r, echo=FALSE, warning=FALSE}
+#Chronic absenteeism rate by grade
+poo <- AbsentGrade
+
+poo2 <- group_by(poo, CountyCode, DistrictCode, Grade) %>%
+  summarise(
+    percentabsent = mean(GradePercent)
+  )
+
+poo.final <- group_by(poo2, Grade) %>%
+  summarise(
+    meanPercentabsent = mean(percentabsent,  na.rm = TRUE),
+    sePercentabsent=sd(percentabsent, na.rm = TRUE)/sqrt(length(percentabsent))
+  )
+
+limits <- aes(ymax = meanPercentabsent + sePercentabsent, ymin=meanPercentabsent - sePercentabsent)
+
+ggplot(poo.final,aes(x=factor(Grade),y=meanPercentabsent,color=factor(Grade),fill=factor(Grade)))+
+  geom_bar(stat="identity")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nChronic absenteeism rate by grade")+
+  labs(x = "Grade", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_y_continuous(labels=percent,limits=c(0,.3),breaks=seq(0,.3,.05))+
+  scale_x_discrete(breaks=c("-1","0","1","2","3","4","5","6","7","8","9","10","11","12"),labels=c("PK", "KG","1","2","3","4","5","6","7","8","9","10","11","12"))+
+  theme(legend.position = "none")+
+  geom_errorbar(limits, width=0.25,color="black")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(text=element_text(family="Century"))
+```
+
+###Focus on the good schools: which county are they in?
+```{r, echo=FALSE, warning=FALSE}
+#calculate mean and SD
+poo <- na.omit(AbsentSchool)
+z <- mean(poo$percentabsent) #0.0976
+zz <- sd(poo$percentabsent) #0.0792
+
+#look at good schools: anything less than mean
+poo2 <- subset(poo, percentabsent < z)
+
+#plot
+ggplot(poo2, aes(percentabsent, fill=factor(CountyCode)))+
+  geom_histogram(binwidth = 0.01)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nHistogram of school chronic absenteeism rate (low CA)")+
+  labs(x = "Chronic absenteeism rate", y = "Count")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_x_continuous(labels=percent,limits=c(-0.02,.12),breaks=seq(-0.02,.12,.02))+
+  theme(legend.position = "bottom")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(text=element_text(family="Century"))+
+  guides(fill=guide_legend(title="County"))
+
+#plot histogram of school
+poo3 <- group_by(poo2, CountyCode) %>%
+  summarise(
+    count = n()
+  )
+
+#sort by descending order
+poo3$CountyCode <- factor(poo3$CountyCode, levels = poo3$CountyCode[order(-poo3$count)])
+
+ggplot(poo3, aes(x=factor(CountyCode),y=count,color=factor(CountyCode),fill=factor(CountyCode)))+
+  geom_bar(stat="identity")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nCounty 3 has most schools w low chronic absenteeism")+
+  labs(x = "County", y = "Count of schools")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(legend.position = "none")+
+  theme(text=element_text(family="Century"))
+```
+
+###Focus on the bad schools: which county are they in?
+```{r, echo=FALSE, warning=FALSE}
+#calculate mean and SD
+z <- mean(poo$percentabsent) #0.0976
+zz <- sd(poo$percentabsent) #0.0792
+
+#define bad schools: > 2SD from mean 
+outliersbad <- z + (2*zz) #anything greater than 25% 
+
+#look at bad schools
+poo2 <- subset(poo, percentabsent > outliersbad)
+
+#plot
+ggplot(poo2, aes(percentabsent, fill=factor(CountyCode)))+
+  geom_histogram(binwidth = 0.01)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nHistogram of high CA (2SD above mean)")+
+  labs(x = "Chronic absenteeism rate", y = "Count")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  scale_x_continuous(labels=percent,limits=c(.2,1),breaks=seq(.2,1,.1))+
+  theme(legend.position = "bottom")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(text=element_text(family="Century"))+
+  guides(fill=guide_legend(title="County"))
+
+#plot histogram of school
+poo3 <- group_by(poo2, CountyCode) %>%
+  summarise(
+    count = n()
+  )
+
+#sort by descending order
+poo3$CountyCode <- factor(poo3$CountyCode, levels = poo3$CountyCode[order(-poo3$count)])
+
+ggplot(poo3, aes(x=factor(CountyCode),y=count,color=factor(CountyCode),fill=factor(CountyCode)))+
+  geom_bar(stat="identity")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nCounty 13 has most schools w high chronic absenteeism")+
+  labs(x = "County", y = "Count of schools")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(legend.position = "none")+
+  theme(text=element_text(family="Century"))
+```
+
+###What are the characteristics of county 13 (high CA) and county 3 (low CA)?
+```{r, echo=FALSE, warning=FALSE}
+foo <- subset(EnrollmentTrendsByGrade, CountyCode == "13" | CountyCode == "03")
+
+#remove total enrollment
+foo <- foo[!(foo$Grade=="Total Enrollment"),]
+
+#remove the word Grade from beginning
+foo$Grade <- substring(foo$Grade, 7)
+
+#reformat foo Grade (it's written as 07 instead of 7)
+foo$Grade[foo$Grade=="01"] <- "1"
+foo$Grade[foo$Grade=="02"] <- "2"
+foo$Grade[foo$Grade=="03"] <- "3"
+foo$Grade[foo$Grade=="04"] <- "4"
+foo$Grade[foo$Grade=="05"] <- "5"
+foo$Grade[foo$Grade=="06"] <- "6"
+foo$Grade[foo$Grade=="07"] <- "7"
+foo$Grade[foo$Grade=="08"] <- "8"
+foo$Grade[foo$Grade=="09"] <- "9"
+foo$Grade[foo$Grade=="PK"] <- "-1"
+foo$Grade[foo$Grade=="KG"] <- "0"
+foo$Grade[foo$Grade=="ed"] <- "99" #ungraded?
+
+#label missing values as NA
+foo[foo == "N"] <- NA
+foo[foo == "*"] <- NA
+
+#convert all columns to numeric
+foo[] <- lapply(foo, function(x) as.numeric(as.character(x)))
+
+#calculate total number of students in each grade 
+foo2 <- group_by(foo, CountyCode) %>%
+  summarise(
+    numofstudents = sum(Count)
+  )
+
+ggplot(foo2,aes(x=factor(CountyCode),y=numofstudents,color=factor(CountyCode),fill=factor(CountyCode)))+
+  geom_bar(stat="identity", position ="dodge")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nNumber of students")+
+  labs(x = "County", y = "Number of students")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(legend.position = "none")+
+  theme(text=element_text(family="Century"))+
+  scale_fill_manual(values = wes_palette("GrandBudapest2"))+
+  scale_color_manual(values = wes_palette("GrandBudapest2"))+
+  scale_y_continuous(labels = comma, limits=c(0,130000),breaks=seq(0,130000,25000))
+
+```
+
+```{r, echo=FALSE, warning=FALSE,fig.width=8}
+foo <- subset(EnrollmentTrendsByGrade, CountyCode == "13" | CountyCode == "03")
+
+#remove total enrollment
+foo <- foo[!(foo$Grade=="Total Enrollment"),]
+
+#remove the word Grade from beginning
+foo$Grade <- substring(foo$Grade, 7)
+
+#reformat foo Grade (it's written as 07 instead of 7)
+foo$Grade[foo$Grade=="01"] <- "1"
+foo$Grade[foo$Grade=="02"] <- "2"
+foo$Grade[foo$Grade=="03"] <- "3"
+foo$Grade[foo$Grade=="04"] <- "4"
+foo$Grade[foo$Grade=="05"] <- "5"
+foo$Grade[foo$Grade=="06"] <- "6"
+foo$Grade[foo$Grade=="07"] <- "7"
+foo$Grade[foo$Grade=="08"] <- "8"
+foo$Grade[foo$Grade=="09"] <- "9"
+foo$Grade[foo$Grade=="PK"] <- "-1"
+foo$Grade[foo$Grade=="KG"] <- "0"
+foo$Grade[foo$Grade=="ed"] <- "99" #ungraded?
+
+#label missing values as NA
+foo[foo == "N"] <- NA
+foo[foo == "*"] <- NA
+
+#convert all columns to numeric
+foo[] <- lapply(foo, function(x) as.numeric(as.character(x)))
+
+#calculate total number of students in each grade 
+foo2 <- group_by(foo, CountyCode, Grade) %>%
+  summarise(
+    numofstudents = sum(Count)
+  )
+
+#calculate total num of students for county 13 and 3
+x13 <- sum(foo2$numofstudents[foo2$CountyCode==13])
+x3 <- sum(foo2$numofstudents[foo2$CountyCode==3])
+
+#divide to get percent
+foo2$percent <- 0
+foo2$percent[1:15] <- foo2$numofstudents[1:15] / x3
+foo2$percent[16:30] <- foo2$numofstudents[16:30] / x13
+
+ggplot(foo2,aes(x=factor(Grade),y=percent,color=factor(CountyCode),fill=factor(CountyCode)))+
+  geom_bar(stat="identity", position ="dodge")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nGrade breakdown")+
+  labs(x = "Grade", y = "Percent of students")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_y_continuous(labels=percent,limits=c(0,.1),breaks=seq(0,.1,.01))+
+  scale_x_discrete(breaks=c("-1","0","1","2","3","4","5","6","7","8","9","10","11","12","99"),labels=c("PK", "KG","1","2","3","4","5","6","7","8","9","10","11","12","Ungraded"))+
+  theme(legend.position = "bottom")+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(text=element_text(family="Century"))+
+  scale_fill_manual(values = wes_palette("GrandBudapest2"),name="County Code",breaks=c("3","13"),labels=c("3 (lower CA)", "13 (higher CA)"))+
+  scale_color_manual(values = wes_palette("GrandBudapest2"))+
+  guides(color=FALSE)
+
+```
+
+```{r, echo=FALSE, warning=FALSE, fig.width=10}
+foo <- subset(EnrollmentByRacialEthnicGroup, CountyCode == "13" | CountyCode == "03")
+
+#label missing values as NA
+foo[foo == "N"] <- NA
+foo[foo == "*"] <- NA
+
+#convert all columns to numeric
+foo$CountyCode <- as.numeric(as.character(foo$CountyCode))
+foo$DistrictCode <- as.numeric(as.character(foo$DistrictCode))
+foo$SchoolCode <- as.numeric(as.character(foo$SchoolCode))
+foo$Percent <- as.numeric(as.character(foo$Percent))
+
+#convert race group to numbers
+foo$ethnic <- 1
+foo$ethnic[foo$RacialAndEthnicGroup=="Asian"] <- 2
+foo$ethnic[foo$RacialAndEthnicGroup=="Black or African American"] <- 3 
+foo$ethnic[foo$RacialAndEthnicGroup=="Hispanic"] <- 4 
+foo$ethnic[foo$RacialAndEthnicGroup=="Native Hawaiian or Pacific Islander"] <- 5 
+foo$ethnic[foo$RacialAndEthnicGroup=="Two or More Races"] <- 6 
+foo$ethnic[foo$RacialAndEthnicGroup=="White"] <- 7 
+
+#convert number to decimal
+foo$Percent <- foo$Percent / 100
+
+#calculate total number of students in each grade 
+foo2 <- group_by(foo, CountyCode, ethnic) %>%
+  summarise(
+    meanpercent = mean(Percent),
+    sepercent=sd(Percent, na.rm = TRUE)/sqrt(length(Percent))
+  )
+
+limits <- aes(ymax = meanpercent + sepercent, ymin=meanpercent - sepercent)
+
+ggplot(foo2,aes(x=factor(ethnic),y=meanpercent,color=factor(CountyCode),fill=factor(CountyCode)))+
+  geom_bar(stat="identity", position ="dodge")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nEthnicity breakdown")+
+  labs(x = "Grade", y = "Percent of students")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_y_continuous(labels=percent,limits=c(0,.6),breaks=seq(0,.6,.1))+
+  scale_x_discrete(breaks=c("1","2","3","4","5","6","7"),labels=c("Native American", "Asian","Black","Hispanic","Hawaiian/PacIslander","2+ Races","White"))+
+  theme(legend.position = "bottom")+
+  theme(text=element_text(family="Century"))+
+  scale_fill_manual(values = wes_palette("GrandBudapest2"),name="County Code",breaks=c("3","13"),labels=c("3 (lower CA)", "13 (higher CA)"))+
+  scale_color_manual(values = wes_palette("GrandBudapest2"))+
+  geom_errorbar(limits, width=0.25, color="black",position=position_dodge(width=0.9))+
+  guides(color=FALSE)
+  
+```
+
+```{r, echo=FALSE, warning=FALSE,fig.width=10}
+foo <- subset(EnrollmentTrendsByStudentGroup, CountyCode == "13" | CountyCode == "03")
+foo <- subset(foo, StudentGroup != "Male" & StudentGroup != "Female")
+
+#label missing values as NA
+foo[foo == "N"] <- NA
+foo[foo == "*"] <- NA
+
+#convert all columns to numeric
+foo$CountyCode <- as.numeric(as.character(foo$CountyCode))
+foo$DistrictCode <- as.numeric(as.character(foo$DistrictCode))
+foo$SchoolCode <- as.numeric(as.character(foo$SchoolCode))
+foo$Percent <- as.numeric(as.character(foo$Percent))
+
+#convert race group to numbers
+foo$group <- 1
+foo$group[foo$StudentGroup=="English Learners"] <- 2
+foo$group[foo$StudentGroup=="Homeless Students"] <- 3 
+foo$group[foo$StudentGroup=="Migrant Students"] <- 4 
+foo$group[foo$StudentGroup=="Military-Connected Students"] <- 5 
+foo$group[foo$StudentGroup=="Students in Foster Care"] <- 6 
+foo$group[foo$StudentGroup=="Students with Disabilities"] <- 7 
+
+#convert number to decimal
+foo$Percent <- foo$Percent / 100
+
+#calculate total number of students in each grade 
+foo2 <- group_by(foo, CountyCode, group) %>%
+  summarise(
+    meanpercent = mean(Percent),
+    sepercent=sd(Percent, na.rm = TRUE)/sqrt(length(Percent))
+  )
+
+limits <- aes(ymax = meanpercent + sepercent, ymin=meanpercent - sepercent)
+
+ggplot(foo2,aes(x=factor(group),y=meanpercent,color=factor(CountyCode),fill=factor(CountyCode)))+
+  geom_bar(stat="identity", position ="dodge")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nStudent group breakdown")+
+  labs(x = "Grade", y = "Percent of students")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_y_continuous(labels=percent,limits=c(0,.6),breaks=seq(0,.6,.1))+
+  scale_x_discrete(breaks=c("1","2","3","4","5","6","7"),labels=c("EcoDis", "EngLearners","Homeless","Migrant","Military","Foster Care","Disabilities"))+
+  theme(legend.position = "bottom")+
+  theme(text=element_text(family="Century"))+
+  scale_fill_manual(values = wes_palette("GrandBudapest2"),name="County Code",breaks=c("3","13"),labels=c("3 (lower CA)", "13 (higher CA)"))+
+  scale_color_manual(values = wes_palette("GrandBudapest2"))+
+  geom_errorbar(limits, width=0.25, color="black",position=position_dodge(width=0.9))+
+  guides(color=FALSE)
+```
+
+####Comparing County 3 and County 13, it looks like County 13 (higher CA) have more economically disadvantaged students, less Asian students, less White students, and more Black students. County 13 also tend to have more students in elementary school compared to middle/high school.
+
+##### Next: what are the characteristics of good vs bad schools?
