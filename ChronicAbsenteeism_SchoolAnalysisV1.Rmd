@@ -32,11 +32,11 @@ library(extrafont)
 #LOAD MULTIPLE EXCEL SHEETS INTO SEPARATE DFS
 
 #get names of sheets
-sheets <- readxl::excel_sheets("~/Documents/Felicia Zhang/Felicia/Princeton/ConsultingClub/PerformanceReportsSchoolData_SY1617_FZ.xlsx")
+sheets <- readxl::excel_sheets("~/Documents/Felicia Zhang/Felicia/Princeton/ConsultingClub/20162017_SchoolData.xlsx")
 
 #load in excel data as 1 big file
 lst <- lapply(sheets, function(sheet) 
-  readxl::read_excel("~/Documents/Felicia Zhang/Felicia/Princeton/ConsultingClub/PerformanceReportsSchoolData_SY1617_FZ.xlsx", sheet = sheet)
+  readxl::read_excel("~/Documents/Felicia Zhang/Felicia/Princeton/ConsultingClub/20162017_SchoolData.xlsx", sheet = sheet)
 )
 
 #prepare names
@@ -51,67 +51,32 @@ list2env(lst, envir = .GlobalEnv)
 
 #*SchoolPercent is n of students absent/n of students in the grade NOT n of students absent/n of students in the school -_-
 
-poo <- EnrollmentTrendsByGrade
+poo <- ChronicAbsenteeism
 
-#remove ungraded and Total Enrollment
-poo <- poo[!(poo$Grade=="Ungraded"),]
-poo <- poo[!(poo$Grade=="Total Enrollment"),]
+#keep only schoolwide data
+poo <- subset(poo, StudentGroup=="Schoolwide")
 
-#remove the word Grade from beginning
-poo$Grade <- substring(poo$Grade, 7)
-
-#reformat poo Grade (it's written as 07 instead of 7)
-poo$Grade[poo$Grade=="01"] <- "1"
-poo$Grade[poo$Grade=="02"] <- "2"
-poo$Grade[poo$Grade=="03"] <- "3"
-poo$Grade[poo$Grade=="04"] <- "4"
-poo$Grade[poo$Grade=="05"] <- "5"
-poo$Grade[poo$Grade=="06"] <- "6"
-poo$Grade[poo$Grade=="07"] <- "7"
-poo$Grade[poo$Grade=="08"] <- "8"
-poo$Grade[poo$Grade=="09"] <- "9"
-
-poo2 <- ChronicAbsByGrade
-
-#combine the 2
-AbsentGrade <- merge(poo, poo2, by=c("CountyCode","DistrictCode","SchoolCode","Grade")) # NA's match
-
-#relabel SchoolPercent to GradePercent
-names(AbsentGrade)[5]<-"NumofStudents"
-names(AbsentGrade)[6]<-"GradePercent"
-
-#replace grades with numeric
-AbsentGrade$Grade[AbsentGrade$Grade=="PK"] <- "-1"
-AbsentGrade$Grade[AbsentGrade$Grade=="KG"] <- "0"
+#create school data
+AbsentSchool <- poo[1:4]
 
 #label missing values as NA
-AbsentGrade[AbsentGrade == "N"] <- NA
-AbsentGrade[AbsentGrade == "*"] <- NA
+AbsentSchool[AbsentSchool == "N"] <- NA
+AbsentSchool[AbsentSchool == "*"] <- NA
 
 #convert all columns to numeric
-AbsentGrade[] <- lapply(AbsentGrade, function(x) as.numeric(as.character(x)))
+AbsentSchool[] <- lapply(AbsentSchool, function(x) as.numeric(as.character(x)))
 
 #convert GradePercent to decimal
-AbsentGrade$GradePercent <- AbsentGrade$GradePercent/100
-
-#calculate Number of students absent using total number of students * percent absent
-AbsentGrade$NumStudentsAbsent <- AbsentGrade$NumofStudents * AbsentGrade$GradePercent
-AbsentGrade$NumStudentsAbsent <- round(AbsentGrade$NumStudentsAbsent)
-
-#get percent absent for each school
-AbsentSchool <- group_by(AbsentGrade,CountyCode,DistrictCode,SchoolCode) %>%
-  summarise(
-    percentabsent = sum(NumStudentsAbsent) / sum(NumofStudents)
-  )
+AbsentSchool$percentabsent <- AbsentSchool$SchoolPercent/100
 
 #get percent absent for each district
-AbsentDistrict <- group_by(AbsentGrade,CountyCode,DistrictCode) %>%
+AbsentDistrict <- group_by(AbsentSchool,CountyCode,DistrictCode) %>%
   summarise(
-    percentabsent = sum(NumStudentsAbsent) / sum(NumofStudents)
+    percentabsent = mean(percentabsent, na.rm = TRUE)
   )
 
 #Mercer county = 21
-
+Mercer <- subset(AbsentSchool, CountyCode==21)
 ```
 ## Big picture look of the data
 
@@ -127,6 +92,9 @@ poo <- na.omit(AbsentSchool)
 poo$color <- 0
 poo$color[poo$CountyCode==21] <- 1
 
+#comment
+require("ggrepel")
+
 ggplot(poo, aes(percentabsent, fill=factor(color)))+
   geom_histogram(binwidth = 0.01)+
   theme_bw()+
@@ -139,9 +107,15 @@ ggplot(poo, aes(percentabsent, fill=factor(color)))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_x_continuous(labels=percent,limits=c(-0.1,1),breaks=seq(-0.1,1,.1))+
   theme(legend.position = "bottom")+
-  scale_fill_manual(values = c("#CCCCCC", "#FF6633"),name="County",breaks=c("0","1"),labels=c("Others", "Mercer"))+
+  geom_vline(xintercept = .1, size =1, linetype = "longdash", colour="red")+
+  scale_fill_manual(values = c("#CCCCCC", "#FF6633"), name="County",breaks=c("0","1"),labels=c("Others", "Mercer"))+
+  geom_text(data = NULL, x = .55, y = 20, label = "School in Trenton", size = 5,  colour = "#FF6633", aes(family=c("Times")))+
   theme(text=element_text(family="Times"))
+
 ```
+
+A school is classified as having chronic absenteeism if it's above 10%. 
+
 \newpage
 
 ### Distribution of chronic absenteeism rate in Mercer County
@@ -163,23 +137,23 @@ ggplot(poo2, aes(percentabsent, fill=factor(DistrictCode)))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
   scale_x_continuous(labels=percent,limits=c(-0.1,1),breaks=seq(-0.1,1,.1))+
-  scale_y_continuous(limits=c(0,11),breaks=seq(0,11,1))+
+  scale_y_continuous(limits=c(0,13),breaks=seq(0,13,1))+
   theme(legend.position = "bottom")+
-  scale_fill_brewer(palette="Set3",name="District")+
+  scale_fill_brewer(palette="Set3",name="District",breaks=c("1245","1950","2580","4255","5510","1430","2280","3105","5210","5715"),labels=c("EASTW", "HAM","LAW","PRI","ROB","EWI","HOP","MER","TRE","WPL"))+
   theme(text=element_text(family="Times"))
 ```
 
 <center>
-District 1245 = East Windsor  
-District 1430 = Ewing   
-District 1950 = Hamilton  
-District 2280 = Hopewell  
-District 2580 = Lawrence  
-District 3105 = Mercer County Vocational  
-District 4255 = Princeton  
-District 5210 = Trenton  
-District 5510 = Robbinsville  
-District 5715 = Windsor-Plainsboro  
+District 1245 = EASTW = East Windsor  
+District 1430 = EWI = Ewing   
+District 1950 = HAM = Hamilton  
+District 2280 = HOP = Hopewell  
+District 2580 = LAW = Lawrence  
+District 3105 = MER = Mercer County Vocational  
+District 4255 = PRI = Princeton  
+District 5210 = TRE = Trenton  
+District 5510 = ROB = Robbinsville  
+District 5715 = WPL = Windsor-Plainsboro  
 </center>
 
 \newpage
@@ -188,21 +162,34 @@ District 5715 = Windsor-Plainsboro
 
 ```{r, echo=FALSE, warning=FALSE}
 #Chronic absenteeism rate by grade in only mercer county
-poo <- AbsentGrade
+poo <- subset(ChronicAbsByGrade, CountyCode=="21")
+
+#replace grades with numeric
+poo$Grade[poo$Grade=="PK"] <- "-1"
+poo$Grade[poo$Grade=="KG"] <- "0"
+
+#label missing values as NA
+poo[poo == "N"] <- NA
+poo[poo == "*"] <- NA
+
+#convert all columns to numeric
+poo[] <- lapply(poo, function(x) as.numeric(as.character(x)))
 
 poo2 <- group_by(poo, CountyCode, DistrictCode, Grade) %>%
   summarise(
-    percentabsent = mean(GradePercent)
+    percentabsent = mean(SchoolPercent, na.rm = TRUE)
   )
 
-#only mercer county
-poo3 <- subset(poo2, CountyCode==21)
-
-poo.final <- group_by(poo3, Grade) %>%
+#only by grade
+poo.final <- group_by(poo2, Grade) %>%
   summarise(
     meanPercentabsent = mean(percentabsent, na.rm = TRUE),
     sePercentabsent=sd(percentabsent, na.rm = TRUE)/sqrt(length(percentabsent))
   )
+
+#convert to decimals
+poo.final$meanPercentabsent <- poo.final$meanPercentabsent/100
+poo.final$sePercentabsent <- poo.final$sePercentabsent/100
 
 limits <- aes(ymax = meanPercentabsent + sePercentabsent, ymin=meanPercentabsent - sePercentabsent)
 
@@ -225,9 +212,9 @@ ggplot(poo.final,aes(x=factor(Grade),y=meanPercentabsent,color=factor(Grade),fil
 ```
 \newpage
 
-###Focusing on the good schools in Mercer County, which districts are they in?
+###Focusing on the schools that do not have chronic absenteeism in Mercer County, which districts are they in?
 
-Good school is defined as a school with chronic absenteeism rate of 10% or less
+A school does not have chronic absenteeism if it's 10% or less.
 
 ```{r, echo=FALSE, warning=FALSE}
 #calculate mean and SD
@@ -250,45 +237,12 @@ ggplot(poo2, aes(percentabsent, fill=factor(DistrictCode)))+
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
-  scale_y_continuous(limits=c(0,10),breaks=seq(0,10,1))+
+  scale_y_continuous(limits=c(0,13),breaks=seq(0,13,1))+
   scale_x_continuous(labels=percent,limits=c(-0.02,.14),breaks=seq(-0.02,.14,.02))+
   theme(legend.position = "bottom")+
   theme(plot.title = element_text(hjust = 0.5))+
   theme(text=element_text(family="Times"))+
-  scale_fill_brewer(palette="Set3",name="District")
-```
-
-\newpage
-
-District 1950 (Hamilton) has the largest number of schools w low chronic absenteeism
-
-```{r, echo=FALSE, warning=FALSE}
-#plot histogram of school
-poo3 <- group_by(poo2, DistrictCode) %>%
-  summarise(
-    count = n()
-  )
-
-#sort by descending order
-poo3$DistrictCode <- factor(poo3$DistrictCode, levels = poo3$DistrictCode[order(-poo3$count)])
-
-ggplot(poo3, aes(x=factor(DistrictCode),y=count,color=factor(DistrictCode),fill=factor(DistrictCode)))+
-  geom_bar(stat="identity")+
-  theme_bw()+
-  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "District", y = "Number of schools")+
-  scale_y_continuous(limits=c(0,12),breaks=seq(0,12,2))+
-  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=14))+ 
-  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
-  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
-  theme(plot.title = element_text(hjust = 0.5))+
-  theme(legend.position = "none")+
-  theme(text=element_text(family="Times"))+
-  scale_color_manual(values = c("#bebad9", "#bb81bc","#81b1d2","#90d3c7","#b4dc6f","#fffcb7","#f98175", "#d9d9d9","#fcb369","#fbcee5"))+
-  scale_fill_manual(values = c("#bebad9", "#bb81bc","#81b1d2","#90d3c7","#b4dc6f","#fffcb7","#f98175", "#d9d9d9","#fcb369","#fbcee5"))
-
-#best county in mercer is 1950, which has 11 schools that are good, and 5715 which has 8 schools
+  scale_fill_brewer(palette="Set3",name="District",breaks=c("1245","1950","2580","4255","5510","1430","2280","3105","5210","5715"),labels=c("EASTW", "HAM","LAW","PRI","ROB","EWI","HOP","MER","TRE","WPL"))
 ```
 
 \newpage
@@ -320,6 +274,7 @@ ggplot(poo3, aes(x=factor(DistrictCode),y=percent,color=factor(DistrictCode),fil
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
   labs(x = "District", y = "Percent of schools")+
   scale_y_continuous(labels=percent)+
+  scale_x_discrete(name="District",breaks=c("1245","1950","2580","4255","5510","1430","2280","3105","5210","5715"),labels=c("EASTW", "HAM","LAW","PRI","ROB","EWI","HOP","MER","TRE","WPL"))+
   theme(plot.title = element_text(face="bold", size=14, hjust=0))+
   theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
@@ -327,16 +282,59 @@ ggplot(poo3, aes(x=factor(DistrictCode),y=percent,color=factor(DistrictCode),fil
   theme(plot.title = element_text(hjust = 0.5))+
   theme(legend.position = "none")+
   theme(text=element_text(family="Times"))+
-  scale_color_manual(values = c("#90d3c7", "#81b1d2","#fcb369","#d9d9d9", "#bb81bc","#fffcb7", "#b4dc6f", "#bebad9","#f98175","#fbcee5"))+
-  scale_fill_manual(values = c("#90d3c7", "#81b1d2","#fcb369","#d9d9d9", "#bb81bc","#fffcb7", "#b4dc6f", "#bebad9","#f98175","#fbcee5"))
+  scale_color_manual(values = c("#90d3c7", "#fffcb7","#82b2d2","#fcb369", "#d9d9d9","#bb81bc", "#f98075", "#bebad9","#b4dc6f","#fbcee5"))+
+  scale_fill_manual(values = c("#90d3c7", "#fffcb7","#82b2d2","#fcb369", "#d9d9d9","#bb81bc", "#f98075", "#bebad9","#b4dc6f","#fbcee5"))
 
 #best county in mercer is 1950, which has 11 schools that are good, and 5715 which has 8 schools
 ```
 \newpage
 
-###Focusing on the bad schools in Mercer County, which districts are they in?
+District 1950 (Hamilton) has the highest number of schools w low chronic absenteeism
 
-Bad school is defined as a school with chronic absenteeism rate of greater than 10%
+```{r, echo=FALSE, warning=FALSE}
+#calculate mean and SD
+poo <- na.omit(AbsentSchool)
+
+#only mercer county
+poo <- subset(poo, CountyCode==21)
+
+#look at good schools: anything less than 10%
+poo2 <- subset(poo, percentabsent < 0.1)
+
+#plot histogram of school
+poo3 <- group_by(poo2, DistrictCode) %>%
+  summarise(
+    count = n()
+  )
+
+#sort by descending order
+poo3$DistrictCode <- factor(poo3$DistrictCode, levels = poo3$DistrictCode[order(-poo3$count)])
+
+ggplot(poo3, aes(x=factor(DistrictCode),y=count,color=factor(DistrictCode),fill=factor(DistrictCode)))+
+  geom_bar(stat="identity")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "District", y = "Number of schools")+
+  scale_y_continuous(limits=c(0,16),breaks=seq(0,16,2))+
+  scale_x_discrete(name="District",breaks=c("1245","1950","2580","4255","5510","1430","2280","3105","5210","5715"),labels=c("EASTW", "HAM","LAW","PRI","ROB","EWI","HOP","MER","TRE","WPL"))+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(legend.position = "none")+
+  theme(text=element_text(family="Times"))+
+  scale_color_manual(values = c("#bebad9", "#bb81bc","#81b1d2","#90d3c7","#fffcb7", "#f98075","#b4dc6f", "#d9d9d9","#fcb369","#fbcee5"))+
+  scale_fill_manual(values = c("#bebad9", "#bb81bc","#81b1d2","#90d3c7","#fffcb7", "#f98075","#b4dc6f", "#d9d9d9","#fcb369","#fbcee5"))
+
+#best county in mercer is 1950, which has 11 schools that are good, and 5715 which has 8 schools
+```
+
+\newpage
+
+###Focusing on the schools with chronic absenteeism in Mercer County, which districts are they in?
+
+A school is classified as chronic absenteeism if the rate is greater than 10%
 
 ```{r, echo=FALSE, warning=FALSE}
 #calculate mean and SD
@@ -363,43 +361,10 @@ ggplot(poo2, aes(percentabsent, fill=factor(DistrictCode)))+
   theme(legend.position = "bottom")+
   theme(plot.title = element_text(hjust = 0.5))+
   theme(text=element_text(family="Times"))+
-  scale_color_manual(values = c("#fffcb7", "#bebad9","#f98175","#b4dc6f","#fbcee5"))+
-  scale_fill_manual(values = c("#fffcb7", "#bebad9","#f98175","#b4dc6f","#fbcee5"), name="District")
+  scale_color_manual(values = c("#bebad9", "#b4dc6f","#f98075","#fbcee5","#bb81bc"))+
+  scale_fill_manual(values = c("#bebad9", "#b4dc6f","#f98075","#fbcee5","#bb81bc"), name="District", breaks=c("1245","1950","2580","4255","5510","1430","2280","3105","5210","5715"),labels=c("EASTW", "HAM","LAW","PRI","ROB","EWI","HOP","MER","TRE","WPL"))
+``` 
 
-```
-
-\newpage
-
-District 5210 (Trenton) has the largest number of schools w high chronic absenteeism
-
-```{r, echo=FALSE, warning=FALSE}
-#plot histogram of school
-poo3 <- group_by(poo2, DistrictCode) %>%
-  summarise(
-    count = n()
-  )
-
-#sort by descending order
-poo3$DistrictCode <- factor(poo3$DistrictCode, levels = poo3$DistrictCode[order(-poo3$count)])
-
-ggplot(poo3, aes(x=factor(DistrictCode),y=count,color=factor(DistrictCode),fill=factor(DistrictCode)))+
-  geom_bar(stat="identity")+
-  theme_bw()+
-  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
-  labs(x = "District", y = "Number of schools")+
-  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
-  theme(axis.title = element_text(face="bold", size=14))+ 
-  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
-  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
-  theme(plot.title = element_text(hjust = 0.5))+
-  scale_y_continuous(limits=c(0,20),breaks=seq(0,20,2))+
-  theme(legend.position = "none")+
-  theme(text=element_text(family="Times"))+
-  scale_color_manual(values = c("#fbcee5", "#bebad9","#f98175","#b4dc6f","#fffcb7"))+
-  scale_fill_manual(values = c("#fbcee5", "#bebad9","#f98175","#b4dc6f","#fffcb7"))
-
-#worst district is 5210, which has 19 schools that are considered bad
-```
 \newpage
 
 Districts 5210 (Trenton), 2280 (Hopewell), 1950 (Hamilton), 4255 (Princeton Regional), 1430 (Ewing) have schools that are considered high chronic absenteeism.  
@@ -433,6 +398,8 @@ ggplot(poo3, aes(x=factor(DistrictCode),y=percent,color=factor(DistrictCode),fil
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
   labs(x = "District", y = "Percent of schools")+
   scale_y_continuous(labels=percent,limits=c(0,1),breaks=seq(0,1,.2))+
+  scale_x_discrete(name="District",breaks=c("1245","1950","2580","4255","5510","1430","2280","3105","5210","5715"),labels=c("EASTW", "HAM","LAW","PRI","ROB","EWI","HOP","MER","TRE","WPL"))+
+  theme(legend.position = "none")+  
   theme(plot.title = element_text(face="bold", size=14, hjust=0))+
   theme(axis.title = element_text(face="bold", size=14))+ 
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
@@ -440,10 +407,53 @@ ggplot(poo3, aes(x=factor(DistrictCode),y=percent,color=factor(DistrictCode),fil
   theme(plot.title = element_text(hjust = 0.5))+
   theme(legend.position = "none")+
   theme(text=element_text(family="Times"))+
-  scale_color_manual(values = c("#fbcee5", "#f98175","#bebad9","#b4dc6f","#fffcb7"))+
-  scale_fill_manual(values = c("#fbcee5", "#f98175","#bebad9","#b4dc6f","#fffcb7"))
+  scale_color_manual(values = c("#fbcee5", "#b4dc6f","#bebad9","#f98075","#bb81bc"))+
+  scale_fill_manual(values = c("#fbcee5", "#b4dc6f","#bebad9","#f98075","#bb81bc"))
 ```
 \newpage
+
+District 5210 (Trenton) has the highest number of schools w high chronic absenteeism
+
+```{r, echo=FALSE, warning=FALSE}
+#calculate mean and SD
+poo <- na.omit(AbsentSchool)
+
+#only mercer county
+poo <- subset(poo, CountyCode==21)
+
+#look at bad schools, greater than 10%
+poo2 <- subset(poo, percentabsent > 0.1)
+
+#plot histogram of school
+poo3 <- group_by(poo2, DistrictCode) %>%
+  summarise(
+    count = n()
+  )
+
+#sort by descending order
+poo3$DistrictCode <- factor(poo3$DistrictCode, levels = poo3$DistrictCode[order(-poo3$count)])
+
+ggplot(poo3, aes(x=factor(DistrictCode),y=count,color=factor(DistrictCode),fill=factor(DistrictCode)))+
+  geom_bar(stat="identity")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "District", y = "Number of schools")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_y_continuous(limits=c(0,20),breaks=seq(0,20,2))+
+  scale_x_discrete(name="District",breaks=c("1245","1950","2580","4255","5510","1430","2280","3105","5210","5715"),labels=c("EASTW", "HAM","LAW","PRI","ROB","EWI","HOP","MER","TRE","WPL"))+
+  theme(legend.position = "none")+
+  theme(text=element_text(family="Times"))+
+  scale_color_manual(values = c("#fbcee5", "#bebad9","#b4dc6f","#f98075","#bb81bc"))+
+  scale_fill_manual(values = c("#fbcee5", "#bebad9","#b4dc6f","#f98075","#bb81bc"))
+
+#worst district is 5210, which has 19 schools that are considered bad
+```
+\newpage
+
 
 ##ALICE report: NJ
 
@@ -486,6 +496,15 @@ poo2$goodbad[poo2$percentabsent < 0.1000001] <- 1
 poo2$rank <- rank(poo2$percentabsent)
 
 poofinal <- subset(poo2, rank < 21 | rank > 59)
+
+#because there are tied spots there are more than 40 schools for the bottom quartile, so we will manually remove them
+good <- subset(poofinal, goodbad==1)
+bad <- subset(poofinal, goodbad==0)
+
+#remove first 8 rows of bad
+bad <- bad[9:28,]
+
+poofinal <- rbind(good,bad)
 ```
 
 ##What are the characteristics of good schools and bad schools?
@@ -502,22 +521,22 @@ foo <- subset(EnrollmentTrendsByGrade, CountyCode=="21")
 foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" | 
                  DistrictCode=="1245" & SchoolCode=="080" |
                  DistrictCode=="1430" & SchoolCode=="105" | 
-                 DistrictCode=="1950" & SchoolCode=="055" |
-                 DistrictCode=="1950" & SchoolCode=="060" | 
+                 DistrictCode=="1430" & SchoolCode=="130" | 
                  DistrictCode=="1950" & SchoolCode=="210" |
-                 DistrictCode=="1950" & SchoolCode=="225" | 
+                 DistrictCode=="1950" & SchoolCode=="260" | 
+                 DistrictCode=="2280" & SchoolCode=="035" |
                  DistrictCode=="2280" & SchoolCode=="040" |
-                 DistrictCode=="2280" & SchoolCode=="065" | 
-                 DistrictCode=="2280" & SchoolCode=="075" |
+                 DistrictCode=="2280" & SchoolCode=="055" | 
+                 DistrictCode=="2280" & SchoolCode=="065" |
                  DistrictCode=="2580" & SchoolCode=="080" |
                  DistrictCode=="2580" & SchoolCode=="100" | 
                  DistrictCode=="3105" & SchoolCode=="301" |
-                 DistrictCode=="4255" & SchoolCode=="050" |
-                 DistrictCode=="4255" & SchoolCode=="080" |
                  DistrictCode=="4255" & SchoolCode=="110" |
                  DistrictCode=="5210" & SchoolCode=="030" |
                  DistrictCode=="5210" & SchoolCode=="050" |
                  DistrictCode=="5210" & SchoolCode=="051" |
+                 DistrictCode=="5210" & SchoolCode=="080" |
+                 DistrictCode=="5210" & SchoolCode=="100" |
                  DistrictCode=="5210" & SchoolCode=="170" |
                  DistrictCode=="5210" & SchoolCode=="190" |
                  DistrictCode=="5210" & SchoolCode=="200" |
@@ -528,6 +547,7 @@ foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" |
                  DistrictCode=="5210" & SchoolCode=="260" |
                  DistrictCode=="5210" & SchoolCode=="265" |
                  DistrictCode=="5210" & SchoolCode=="270" |
+                 DistrictCode=="5210" & SchoolCode=="280" |
                  DistrictCode=="5210" & SchoolCode=="300" |
                  DistrictCode=="5210" & SchoolCode=="310" |
                  DistrictCode=="5210" & SchoolCode=="401" |
@@ -535,31 +555,32 @@ foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" |
                  DistrictCode=="5715" & SchoolCode=="020" |
                  DistrictCode=="5715" & SchoolCode=="025" |
                  DistrictCode=="5715" & SchoolCode=="035" |
-                 DistrictCode=="5715" & SchoolCode=="040" |
+                 DistrictCode=="5715" & SchoolCode=="130" |
                  DistrictCode=="5715" & SchoolCode=="140" |
-                 DistrictCode=="5715" & SchoolCode=="150")
+                 DistrictCode=="5715" & SchoolCode=="160")
 
 #label if schools is good or bad
 foo$goodbad <- 1 #good
-foo$goodbad[foo$DistrictCode=="1950" & foo$SchoolCode=="055" | 
-              foo$DistrictCode=="1950" & foo$SchoolCode=="060" | 
-              foo$DistrictCode=="4255" & foo$SchoolCode=="050" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="030" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="050" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="051" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="170" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="190" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="200" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="210" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="230" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="235" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="240" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="260" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="265" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="270" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="300" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="310" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="401"] <- 0
+foo$goodbad[foo$DistrictCode=="5210" & foo$SchoolCode=="030" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="050" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="051" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="080" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="100" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="170" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="190" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="200" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="210" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="230" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="235" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="240" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="260" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="265" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="270" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="280" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="300" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="310" |
+                foo$DistrictCode=="5210" & foo$SchoolCode=="401" |
+              foo$DistrictCode=="5715" & foo$SchoolCode=="130"] <- 0
 
 #remove total enrollment
 foo <- foo[!(foo$Grade=="Total Enrollment"),]
@@ -630,22 +651,22 @@ foo <- subset(EnrollmentTrendsByGrade, CountyCode=="21")
 foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" | 
                  DistrictCode=="1245" & SchoolCode=="080" |
                  DistrictCode=="1430" & SchoolCode=="105" | 
-                 DistrictCode=="1950" & SchoolCode=="055" |
-                 DistrictCode=="1950" & SchoolCode=="060" | 
+                 DistrictCode=="1430" & SchoolCode=="130" | 
                  DistrictCode=="1950" & SchoolCode=="210" |
-                 DistrictCode=="1950" & SchoolCode=="225" | 
+                 DistrictCode=="1950" & SchoolCode=="260" | 
+                 DistrictCode=="2280" & SchoolCode=="035" |
                  DistrictCode=="2280" & SchoolCode=="040" |
-                 DistrictCode=="2280" & SchoolCode=="065" | 
-                 DistrictCode=="2280" & SchoolCode=="075" |
+                 DistrictCode=="2280" & SchoolCode=="055" | 
+                 DistrictCode=="2280" & SchoolCode=="065" |
                  DistrictCode=="2580" & SchoolCode=="080" |
                  DistrictCode=="2580" & SchoolCode=="100" | 
                  DistrictCode=="3105" & SchoolCode=="301" |
-                 DistrictCode=="4255" & SchoolCode=="050" |
-                 DistrictCode=="4255" & SchoolCode=="080" |
                  DistrictCode=="4255" & SchoolCode=="110" |
                  DistrictCode=="5210" & SchoolCode=="030" |
                  DistrictCode=="5210" & SchoolCode=="050" |
                  DistrictCode=="5210" & SchoolCode=="051" |
+                 DistrictCode=="5210" & SchoolCode=="080" |
+                 DistrictCode=="5210" & SchoolCode=="100" |
                  DistrictCode=="5210" & SchoolCode=="170" |
                  DistrictCode=="5210" & SchoolCode=="190" |
                  DistrictCode=="5210" & SchoolCode=="200" |
@@ -656,6 +677,7 @@ foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" |
                  DistrictCode=="5210" & SchoolCode=="260" |
                  DistrictCode=="5210" & SchoolCode=="265" |
                  DistrictCode=="5210" & SchoolCode=="270" |
+                 DistrictCode=="5210" & SchoolCode=="280" |
                  DistrictCode=="5210" & SchoolCode=="300" |
                  DistrictCode=="5210" & SchoolCode=="310" |
                  DistrictCode=="5210" & SchoolCode=="401" |
@@ -663,32 +685,32 @@ foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" |
                  DistrictCode=="5715" & SchoolCode=="020" |
                  DistrictCode=="5715" & SchoolCode=="025" |
                  DistrictCode=="5715" & SchoolCode=="035" |
-                 DistrictCode=="5715" & SchoolCode=="040" |
+                 DistrictCode=="5715" & SchoolCode=="130" |
                  DistrictCode=="5715" & SchoolCode=="140" |
-                 DistrictCode=="5715" & SchoolCode=="150")
+                 DistrictCode=="5715" & SchoolCode=="160")
 
 #label if schools is good or bad
 foo$goodbad <- 1 #good
-foo$goodbad[foo$DistrictCode=="1950" & foo$SchoolCode=="055" | 
-              foo$DistrictCode=="1950" & foo$SchoolCode=="060" | 
-              foo$DistrictCode=="4255" & foo$SchoolCode=="050" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="030" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="050" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="051" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="170" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="190" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="200" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="210" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="230" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="235" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="240" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="260" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="265" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="270" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="300" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="310" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="401"] <- 0
-
+foo$goodbad[foo$DistrictCode=="5210" & foo$SchoolCode=="030" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="050" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="051" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="080" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="100" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="170" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="190" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="200" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="210" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="230" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="235" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="240" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="260" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="265" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="270" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="280" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="300" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="310" |
+                foo$DistrictCode=="5210" & foo$SchoolCode=="401" |
+              foo$DistrictCode=="5715" & foo$SchoolCode=="130"] <- 0
 
 #remove total enrollment
 foo <- foo[!(foo$Grade=="Total Enrollment"),]
@@ -742,7 +764,7 @@ ggplot(foo2,aes(x=factor(Grade),y=percent,color=factor(goodbad),fill=factor(good
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
-  scale_y_continuous(labels=percent,limits=c(0,.2),breaks=seq(0,.2,.02))+
+  scale_y_continuous(labels=percent,limits=c(0,.14),breaks=seq(0,.14,.02))+
   scale_x_discrete(breaks=c("-1","0","1","2","3","4","5","6","7","8","9","10","11","12","99"),labels=c("PK", "KG","1","2","3","4","5","6","7","8","9","10","11","12","Ungraded"))+
   theme(legend.position = "bottom")+
   theme(plot.title = element_text(hjust = 0.5))+
@@ -769,22 +791,22 @@ foo <- subset(foo, StudentGroup == "Male" | StudentGroup == "Female")
 foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" | 
                  DistrictCode=="1245" & SchoolCode=="080" |
                  DistrictCode=="1430" & SchoolCode=="105" | 
-                 DistrictCode=="1950" & SchoolCode=="055" |
-                 DistrictCode=="1950" & SchoolCode=="060" | 
+                 DistrictCode=="1430" & SchoolCode=="130" | 
                  DistrictCode=="1950" & SchoolCode=="210" |
-                 DistrictCode=="1950" & SchoolCode=="225" | 
+                 DistrictCode=="1950" & SchoolCode=="260" | 
+                 DistrictCode=="2280" & SchoolCode=="035" |
                  DistrictCode=="2280" & SchoolCode=="040" |
-                 DistrictCode=="2280" & SchoolCode=="065" | 
-                 DistrictCode=="2280" & SchoolCode=="075" |
+                 DistrictCode=="2280" & SchoolCode=="055" | 
+                 DistrictCode=="2280" & SchoolCode=="065" |
                  DistrictCode=="2580" & SchoolCode=="080" |
                  DistrictCode=="2580" & SchoolCode=="100" | 
                  DistrictCode=="3105" & SchoolCode=="301" |
-                 DistrictCode=="4255" & SchoolCode=="050" |
-                 DistrictCode=="4255" & SchoolCode=="080" |
                  DistrictCode=="4255" & SchoolCode=="110" |
                  DistrictCode=="5210" & SchoolCode=="030" |
                  DistrictCode=="5210" & SchoolCode=="050" |
                  DistrictCode=="5210" & SchoolCode=="051" |
+                 DistrictCode=="5210" & SchoolCode=="080" |
+                 DistrictCode=="5210" & SchoolCode=="100" |
                  DistrictCode=="5210" & SchoolCode=="170" |
                  DistrictCode=="5210" & SchoolCode=="190" |
                  DistrictCode=="5210" & SchoolCode=="200" |
@@ -795,6 +817,7 @@ foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" |
                  DistrictCode=="5210" & SchoolCode=="260" |
                  DistrictCode=="5210" & SchoolCode=="265" |
                  DistrictCode=="5210" & SchoolCode=="270" |
+                 DistrictCode=="5210" & SchoolCode=="280" |
                  DistrictCode=="5210" & SchoolCode=="300" |
                  DistrictCode=="5210" & SchoolCode=="310" |
                  DistrictCode=="5210" & SchoolCode=="401" |
@@ -802,32 +825,32 @@ foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" |
                  DistrictCode=="5715" & SchoolCode=="020" |
                  DistrictCode=="5715" & SchoolCode=="025" |
                  DistrictCode=="5715" & SchoolCode=="035" |
-                 DistrictCode=="5715" & SchoolCode=="040" |
+                 DistrictCode=="5715" & SchoolCode=="130" |
                  DistrictCode=="5715" & SchoolCode=="140" |
-                 DistrictCode=="5715" & SchoolCode=="150")
+                 DistrictCode=="5715" & SchoolCode=="160")
 
 #label if schools is good or bad
 foo$goodbad <- 1 #good
-foo$goodbad[foo$DistrictCode=="1950" & foo$SchoolCode=="055" | 
-              foo$DistrictCode=="1950" & foo$SchoolCode=="060" | 
-              foo$DistrictCode=="4255" & foo$SchoolCode=="050" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="030" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="050" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="051" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="170" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="190" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="200" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="210" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="230" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="235" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="240" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="260" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="265" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="270" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="300" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="310" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="401"] <- 0
-
+foo$goodbad[foo$DistrictCode=="5210" & foo$SchoolCode=="030" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="050" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="051" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="080" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="100" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="170" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="190" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="200" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="210" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="230" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="235" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="240" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="260" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="265" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="270" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="280" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="300" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="310" |
+                foo$DistrictCode=="5210" & foo$SchoolCode=="401" |
+              foo$DistrictCode=="5715" & foo$SchoolCode=="130"] <- 0
 
 #label missing values as NA
 foo[foo == "N"] <- NA
@@ -855,8 +878,9 @@ foo2 <- group_by(foo, goodbad, group) %>%
 
 limits <- aes(ymax = meanpercent + sepercent, ymin=meanpercent - sepercent)
 
-ggplot(foo2,aes(x=factor(group),y=meanpercent,color=factor(goodbad),fill=factor(goodbad)))+
-  geom_bar(stat="identity", position ="dodge")+
+ggplot(foo,aes(x=factor(group),y=Percent,fill=factor(goodbad)))+
+  geom_boxplot()+
+  geom_point(pch = 21, position = position_jitterdodge())+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
   labs(x = "Student group", y = "Percent of students")+
@@ -865,14 +889,12 @@ ggplot(foo2,aes(x=factor(group),y=meanpercent,color=factor(goodbad),fill=factor(
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
-  scale_y_continuous(labels=percent,limits=c(0,.6),breaks=seq(0,.6,.1))+
+  scale_y_continuous(labels=percent,limits=c(.3,.7),breaks=seq(.3,.7,.1))+
   scale_x_discrete(breaks=c("1","2"),labels=c("Female", "Male"))+
   theme(legend.position = "bottom")+
   theme(text=element_text(family="Times"))+
-  scale_fill_manual(values = c("#bebad9", "#3b6dae"), name="Schools", breaks=c("0","1"), labels=c("Bottom 25%", "Top 25%"))+
-  scale_color_manual(values = c("#bebad9", "#3b6dae"))+
-  geom_errorbar(limits, width=0.25, color="black",position=position_dodge(width=0.9))+
-  guides(color=FALSE)
+  scale_fill_manual(values = c("#bebad9", "#3b6dae"), name="Schools", breaks=c("0","1"), labels=c("Bottom 25%", "Top 25%"))
+
 ```
 
 The two quartiles have same percentage of students that are female and male.
@@ -888,22 +910,22 @@ foo <- subset(EnrollmentByRacialEthnicGroup, CountyCode=="21")
 foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" | 
                  DistrictCode=="1245" & SchoolCode=="080" |
                  DistrictCode=="1430" & SchoolCode=="105" | 
-                 DistrictCode=="1950" & SchoolCode=="055" |
-                 DistrictCode=="1950" & SchoolCode=="060" | 
+                 DistrictCode=="1430" & SchoolCode=="130" | 
                  DistrictCode=="1950" & SchoolCode=="210" |
-                 DistrictCode=="1950" & SchoolCode=="225" | 
+                 DistrictCode=="1950" & SchoolCode=="260" | 
+                 DistrictCode=="2280" & SchoolCode=="035" |
                  DistrictCode=="2280" & SchoolCode=="040" |
-                 DistrictCode=="2280" & SchoolCode=="065" | 
-                 DistrictCode=="2280" & SchoolCode=="075" |
+                 DistrictCode=="2280" & SchoolCode=="055" | 
+                 DistrictCode=="2280" & SchoolCode=="065" |
                  DistrictCode=="2580" & SchoolCode=="080" |
                  DistrictCode=="2580" & SchoolCode=="100" | 
                  DistrictCode=="3105" & SchoolCode=="301" |
-                 DistrictCode=="4255" & SchoolCode=="050" |
-                 DistrictCode=="4255" & SchoolCode=="080" |
                  DistrictCode=="4255" & SchoolCode=="110" |
                  DistrictCode=="5210" & SchoolCode=="030" |
                  DistrictCode=="5210" & SchoolCode=="050" |
                  DistrictCode=="5210" & SchoolCode=="051" |
+                 DistrictCode=="5210" & SchoolCode=="080" |
+                 DistrictCode=="5210" & SchoolCode=="100" |
                  DistrictCode=="5210" & SchoolCode=="170" |
                  DistrictCode=="5210" & SchoolCode=="190" |
                  DistrictCode=="5210" & SchoolCode=="200" |
@@ -914,6 +936,7 @@ foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" |
                  DistrictCode=="5210" & SchoolCode=="260" |
                  DistrictCode=="5210" & SchoolCode=="265" |
                  DistrictCode=="5210" & SchoolCode=="270" |
+                 DistrictCode=="5210" & SchoolCode=="280" |
                  DistrictCode=="5210" & SchoolCode=="300" |
                  DistrictCode=="5210" & SchoolCode=="310" |
                  DistrictCode=="5210" & SchoolCode=="401" |
@@ -921,31 +944,32 @@ foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" |
                  DistrictCode=="5715" & SchoolCode=="020" |
                  DistrictCode=="5715" & SchoolCode=="025" |
                  DistrictCode=="5715" & SchoolCode=="035" |
-                 DistrictCode=="5715" & SchoolCode=="040" |
+                 DistrictCode=="5715" & SchoolCode=="130" |
                  DistrictCode=="5715" & SchoolCode=="140" |
-                 DistrictCode=="5715" & SchoolCode=="150")
+                 DistrictCode=="5715" & SchoolCode=="160")
 
 #label if schools is good or bad
 foo$goodbad <- 1 #good
-foo$goodbad[foo$DistrictCode=="1950" & foo$SchoolCode=="055" | 
-              foo$DistrictCode=="1950" & foo$SchoolCode=="060" | 
-              foo$DistrictCode=="4255" & foo$SchoolCode=="050" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="030" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="050" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="051" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="170" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="190" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="200" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="210" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="230" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="235" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="240" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="260" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="265" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="270" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="300" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="310" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="401"] <- 0
+foo$goodbad[foo$DistrictCode=="5210" & foo$SchoolCode=="030" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="050" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="051" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="080" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="100" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="170" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="190" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="200" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="210" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="230" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="235" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="240" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="260" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="265" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="270" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="280" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="300" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="310" |
+                foo$DistrictCode=="5210" & foo$SchoolCode=="401" |
+              foo$DistrictCode=="5715" & foo$SchoolCode=="130"] <- 0
 
 #label missing values as NA
 foo[foo == "N"] <- NA
@@ -958,7 +982,7 @@ foo$SchoolCode <- as.numeric(as.character(foo$SchoolCode))
 foo$Percent <- as.numeric(as.character(foo$Percent))
 
 #convert race group to numbers
-foo$ethnic <- 1
+foo$ethnic <- 1 #native american
 foo$ethnic[foo$RacialAndEthnicGroup=="Asian"] <- 2
 foo$ethnic[foo$RacialAndEthnicGroup=="Black or African American"] <- 3 
 foo$ethnic[foo$RacialAndEthnicGroup=="Hispanic"] <- 4 
@@ -978,7 +1002,11 @@ foo2 <- group_by(foo, goodbad, ethnic) %>%
 
 limits <- aes(ymax = meanpercent + sepercent, ymin=meanpercent - sepercent)
 
-ggplot(foo2,aes(x=factor(ethnic),y=meanpercent,color=factor(goodbad),fill=factor(goodbad)))+
+#remove native american (1), hawaiian (5)
+foo3 <- subset(foo2, ethnic > 1)
+foo3 <- subset(foo3, ethnic != 5)
+
+ggplot(foo3,aes(x=factor(ethnic),y=meanpercent,color=factor(goodbad),fill=factor(goodbad)))+
   geom_bar(stat="identity", position ="dodge")+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
@@ -1015,22 +1043,22 @@ foo <- subset(foo, StudentGroup != "Male" & StudentGroup != "Female")
 foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" | 
                  DistrictCode=="1245" & SchoolCode=="080" |
                  DistrictCode=="1430" & SchoolCode=="105" | 
-                 DistrictCode=="1950" & SchoolCode=="055" |
-                 DistrictCode=="1950" & SchoolCode=="060" | 
+                 DistrictCode=="1430" & SchoolCode=="130" | 
                  DistrictCode=="1950" & SchoolCode=="210" |
-                 DistrictCode=="1950" & SchoolCode=="225" | 
+                 DistrictCode=="1950" & SchoolCode=="260" | 
+                 DistrictCode=="2280" & SchoolCode=="035" |
                  DistrictCode=="2280" & SchoolCode=="040" |
-                 DistrictCode=="2280" & SchoolCode=="065" | 
-                 DistrictCode=="2280" & SchoolCode=="075" |
+                 DistrictCode=="2280" & SchoolCode=="055" | 
+                 DistrictCode=="2280" & SchoolCode=="065" |
                  DistrictCode=="2580" & SchoolCode=="080" |
                  DistrictCode=="2580" & SchoolCode=="100" | 
                  DistrictCode=="3105" & SchoolCode=="301" |
-                 DistrictCode=="4255" & SchoolCode=="050" |
-                 DistrictCode=="4255" & SchoolCode=="080" |
                  DistrictCode=="4255" & SchoolCode=="110" |
                  DistrictCode=="5210" & SchoolCode=="030" |
                  DistrictCode=="5210" & SchoolCode=="050" |
                  DistrictCode=="5210" & SchoolCode=="051" |
+                 DistrictCode=="5210" & SchoolCode=="080" |
+                 DistrictCode=="5210" & SchoolCode=="100" |
                  DistrictCode=="5210" & SchoolCode=="170" |
                  DistrictCode=="5210" & SchoolCode=="190" |
                  DistrictCode=="5210" & SchoolCode=="200" |
@@ -1041,6 +1069,7 @@ foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" |
                  DistrictCode=="5210" & SchoolCode=="260" |
                  DistrictCode=="5210" & SchoolCode=="265" |
                  DistrictCode=="5210" & SchoolCode=="270" |
+                 DistrictCode=="5210" & SchoolCode=="280" |
                  DistrictCode=="5210" & SchoolCode=="300" |
                  DistrictCode=="5210" & SchoolCode=="310" |
                  DistrictCode=="5210" & SchoolCode=="401" |
@@ -1048,31 +1077,32 @@ foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" |
                  DistrictCode=="5715" & SchoolCode=="020" |
                  DistrictCode=="5715" & SchoolCode=="025" |
                  DistrictCode=="5715" & SchoolCode=="035" |
-                 DistrictCode=="5715" & SchoolCode=="040" |
+                 DistrictCode=="5715" & SchoolCode=="130" |
                  DistrictCode=="5715" & SchoolCode=="140" |
-                 DistrictCode=="5715" & SchoolCode=="150")
+                 DistrictCode=="5715" & SchoolCode=="160")
 
 #label if schools is good or bad
 foo$goodbad <- 1 #good
-foo$goodbad[foo$DistrictCode=="1950" & foo$SchoolCode=="055" | 
-              foo$DistrictCode=="1950" & foo$SchoolCode=="060" | 
-              foo$DistrictCode=="4255" & foo$SchoolCode=="050" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="030" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="050" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="051" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="170" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="190" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="200" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="210" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="230" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="235" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="240" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="260" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="265" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="270" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="300" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="310" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="401"] <- 0
+foo$goodbad[foo$DistrictCode=="5210" & foo$SchoolCode=="030" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="050" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="051" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="080" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="100" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="170" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="190" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="200" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="210" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="230" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="235" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="240" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="260" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="265" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="270" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="280" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="300" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="310" |
+                foo$DistrictCode=="5210" & foo$SchoolCode=="401" |
+              foo$DistrictCode=="5715" & foo$SchoolCode=="130"] <- 0
 
 #label missing values as NA
 foo[foo == "N"] <- NA
@@ -1105,7 +1135,10 @@ foo2 <- group_by(foo, goodbad, group) %>%
 
 limits <- aes(ymax = meanpercent + sepercent, ymin=meanpercent - sepercent)
 
-ggplot(foo2,aes(x=factor(group),y=meanpercent,color=factor(goodbad),fill=factor(goodbad)))+
+#remove homeless - fostercare (3-6)
+foo3 <- subset(foo2, group < 3 | group > 6)
+
+ggplot(foo3,aes(x=factor(group),y=meanpercent,color=factor(goodbad),fill=factor(goodbad)))+
   geom_bar(stat="identity", position ="dodge")+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
@@ -1164,22 +1197,22 @@ foo <- subset(EnrollmentByHomeLanguage, CountyCode=="21")
 foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" | 
                  DistrictCode=="1245" & SchoolCode=="080" |
                  DistrictCode=="1430" & SchoolCode=="105" | 
-                 DistrictCode=="1950" & SchoolCode=="055" |
-                 DistrictCode=="1950" & SchoolCode=="060" | 
+                 DistrictCode=="1430" & SchoolCode=="130" | 
                  DistrictCode=="1950" & SchoolCode=="210" |
-                 DistrictCode=="1950" & SchoolCode=="225" | 
+                 DistrictCode=="1950" & SchoolCode=="260" | 
+                 DistrictCode=="2280" & SchoolCode=="035" |
                  DistrictCode=="2280" & SchoolCode=="040" |
-                 DistrictCode=="2280" & SchoolCode=="065" | 
-                 DistrictCode=="2280" & SchoolCode=="075" |
+                 DistrictCode=="2280" & SchoolCode=="055" | 
+                 DistrictCode=="2280" & SchoolCode=="065" |
                  DistrictCode=="2580" & SchoolCode=="080" |
                  DistrictCode=="2580" & SchoolCode=="100" | 
                  DistrictCode=="3105" & SchoolCode=="301" |
-                 DistrictCode=="4255" & SchoolCode=="050" |
-                 DistrictCode=="4255" & SchoolCode=="080" |
                  DistrictCode=="4255" & SchoolCode=="110" |
                  DistrictCode=="5210" & SchoolCode=="030" |
                  DistrictCode=="5210" & SchoolCode=="050" |
                  DistrictCode=="5210" & SchoolCode=="051" |
+                 DistrictCode=="5210" & SchoolCode=="080" |
+                 DistrictCode=="5210" & SchoolCode=="100" |
                  DistrictCode=="5210" & SchoolCode=="170" |
                  DistrictCode=="5210" & SchoolCode=="190" |
                  DistrictCode=="5210" & SchoolCode=="200" |
@@ -1190,6 +1223,7 @@ foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" |
                  DistrictCode=="5210" & SchoolCode=="260" |
                  DistrictCode=="5210" & SchoolCode=="265" |
                  DistrictCode=="5210" & SchoolCode=="270" |
+                 DistrictCode=="5210" & SchoolCode=="280" |
                  DistrictCode=="5210" & SchoolCode=="300" |
                  DistrictCode=="5210" & SchoolCode=="310" |
                  DistrictCode=="5210" & SchoolCode=="401" |
@@ -1197,31 +1231,32 @@ foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" |
                  DistrictCode=="5715" & SchoolCode=="020" |
                  DistrictCode=="5715" & SchoolCode=="025" |
                  DistrictCode=="5715" & SchoolCode=="035" |
-                 DistrictCode=="5715" & SchoolCode=="040" |
+                 DistrictCode=="5715" & SchoolCode=="130" |
                  DistrictCode=="5715" & SchoolCode=="140" |
-                 DistrictCode=="5715" & SchoolCode=="150")
+                 DistrictCode=="5715" & SchoolCode=="160")
 
 #label if schools is good or bad
 foo$goodbad <- 1 #good
-foo$goodbad[foo$DistrictCode=="1950" & foo$SchoolCode=="055" | 
-              foo$DistrictCode=="1950" & foo$SchoolCode=="060" | 
-              foo$DistrictCode=="4255" & foo$SchoolCode=="050" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="030" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="050" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="051" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="170" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="190" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="200" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="210" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="230" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="235" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="240" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="260" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="265" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="270" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="300" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="310" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="401"] <- 0
+foo$goodbad[foo$DistrictCode=="5210" & foo$SchoolCode=="030" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="050" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="051" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="080" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="100" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="170" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="190" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="200" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="210" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="230" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="235" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="240" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="260" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="265" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="270" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="280" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="300" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="310" |
+                foo$DistrictCode=="5210" & foo$SchoolCode=="401" |
+              foo$DistrictCode=="5715" & foo$SchoolCode=="130"] <- 0
 
 #label missing values as NA
 foo[foo == "N"] <- NA
@@ -1235,24 +1270,23 @@ foo$Percent <- as.numeric(as.character(foo$`%OfStudents`))
 
 #convert group to numbers
 foo$group <- 1 #english
-foo$group[foo$HomeLanguage=="Other"] <- 2
-foo$group[foo$HomeLanguage=="Spanish"] <- 3 
+foo$group[foo$HomeLanguage=="Spanish"] <- 2
+foo$group[foo$HomeLanguage=="Other"] <- 3 
 foo$group[foo$HomeLanguage=="Gujarati"] <- 4 
 foo$group[foo$HomeLanguage=="Hindi"] <- 5 
 foo$group[foo$HomeLanguage=="Telugu"] <- 6 
 foo$group[foo$HomeLanguage=="Urdu"] <- 7 
-foo$group[foo$HomeLanguage=="Haitian"] <- 8 
-foo$group[foo$HomeLanguage=="Creoles and pidgins, French-based"] <- 9 
-foo$group[foo$HomeLanguage=="Arabic"] <- 10 
-foo$group[foo$HomeLanguage=="Chinese"] <- 11 
-foo$group[foo$HomeLanguage=="Japanese"] <- 12 
-foo$group[foo$HomeLanguage=="Polish"] <- 13 
-foo$group[foo$HomeLanguage=="Russian"] <- 14 
-foo$group[foo$HomeLanguage=="French"] <- 15 
-foo$group[foo$HomeLanguage=="Korean"] <- 16 
-foo$group[foo$HomeLanguage=="Italian"] <- 17 
-foo$group[foo$HomeLanguage=="Hebrew"] <- 18 
-foo$group[foo$HomeLanguage=="Tamil"] <- 19 
+foo$group[foo$HomeLanguage=="Creoles and pidgins, English-based"] <- 8 
+foo$group[foo$HomeLanguage=="Creoles and pidgins"] <- 9 
+foo$group[foo$HomeLanguage=="Chinese"] <- 10
+foo$group[foo$HomeLanguage=="Japanese"] <- 11 
+foo$group[foo$HomeLanguage=="Polish"] <- 12 
+foo$group[foo$HomeLanguage=="Russian"] <- 13 
+foo$group[foo$HomeLanguage=="Arabic"] <- 14 
+foo$group[foo$HomeLanguage=="Hebrew"] <- 15 
+foo$group[foo$HomeLanguage=="French"] <- 16
+foo$group[foo$HomeLanguage=="Haitian"] <- 17
+foo$group[foo$HomeLanguage=="Tamil"] <- 18 
 
 #convert number to decimal
 foo$Percent <- foo$Percent / 100
@@ -1270,62 +1304,58 @@ foo.g <- subset(foo2, goodbad==1)
 foo.g$goodbad <- NULL
 
 newrow1 <- c(8,0,0)
-newrow2 <- c(9,0,0)
+newrow2 <- c(17,0,0)
 foo.g <- rbind(foo.g[1:7,],newrow1,foo.g[-(1:7),])
-foo.g <- rbind(foo.g[1:8,],newrow2,foo.g[-(1:8),])
+foo.g <- rbind(foo.g[1:16,],newrow2,foo.g[-(1:16),])
 
 #bad 
 foo.b <- subset(foo2, goodbad==0)
 foo.b$goodbad <- NULL
 
 newrow1 <- c(4,0,0)
-newrow2 <- c(5,0,0)
-newrow3 <- c(6,0,0)
-newrow4 <- c(7,0,0)
-newrow5 <- c(10,0,0)
+newrow2 <- c(7,0,0)
+newrow3 <- c(8,0,0)
+newrow4 <- c(9,0,0)
+newrow5 <- c(11,0,0)
 newrow6 <- c(12,0,0)
 newrow7 <- c(13,0,0)
 newrow8 <- c(14,0,0)
-newrow9 <- c(16,0,0)
-newrow10 <- c(17,0,0)
-newrow11 <- c(18,0,0)
-newrow12 <- c(19,0,0)
+newrow9 <- c(15,0,0)
+newrow10 <- c(16,0,0)
+
 foo.b <- rbind(foo.b[1:3,],newrow1,foo.b[-(1:3),])
-foo.b <- rbind(foo.b[1:4,],newrow2,foo.b[-(1:4),])
-foo.b <- rbind(foo.b[1:5,],newrow3,foo.b[-(1:5),])
-foo.b <- rbind(foo.b[1:6,],newrow4,foo.b[-(1:6),])
-foo.b <- rbind(foo.b[1:9,],newrow5,foo.b[-(1:9),])
+foo.b <- rbind(foo.b[1:6,],newrow2,foo.b[-(1:6),])
+foo.b <- rbind(foo.b[1:7,],newrow3,foo.b[-(1:7),])
+foo.b <- rbind(foo.b[1:8,],newrow4,foo.b[-(1:8),])
+foo.b <- rbind(foo.b[1:10,],newrow5,foo.b[-(1:10),])
 foo.b <- rbind(foo.b[1:11,],newrow6,foo.b[-(1:11),])
 foo.b <- rbind(foo.b[1:12,],newrow7,foo.b[-(1:12),])
 foo.b <- rbind(foo.b[1:13,],newrow8,foo.b[-(1:13),])
-foo.b <- rbind(foo.b,newrow9)
-foo.b <- rbind(foo.b,newrow10)
-foo.b <- rbind(foo.b,newrow11)
-foo.b <- rbind(foo.b,newrow12)
+foo.b <- rbind(foo.b[1:14,],newrow9,foo.b[-(1:14),])
+foo.b <- rbind(foo.b[1:15,],newrow10,foo.b[-(1:15),])
 
 foofinal2 <- rbind(foo.b,foo.g)
 foofinal2$goodbad <- 0
-foofinal2$goodbad[20:38] <- 1
+foofinal2$goodbad[19:36] <- 1
 
 foofinal2$language <- "English" #english
-foofinal2$language[foofinal2$group==2] <- "Other"
-foofinal2$language[foofinal2$group==3] <- "Spanish" 
+foofinal2$language[foofinal2$group==2] <- "Spanish"
+foofinal2$language[foofinal2$group==3] <- "Other" 
 foofinal2$language[foofinal2$group==4] <- "Gujarati"
 foofinal2$language[foofinal2$group==5] <- "Hindi" 
 foofinal2$language[foofinal2$group==6] <- "Telugu" 
 foofinal2$language[foofinal2$group==7] <- "Urdu" 
-foofinal2$language[foofinal2$group==8] <- "Haitian" 
-foofinal2$language[foofinal2$group==9] <- "Creoles and pidgins, French-based" 
-foofinal2$language[foofinal2$group==10] <- "Arabic" 
-foofinal2$language[foofinal2$group==11] <- "Chinese" 
-foofinal2$language[foofinal2$group==12] <- "Japanese" 
-foofinal2$language[foofinal2$group==13] <- "Polish" 
-foofinal2$language[foofinal2$group==14] <- "Russian" 
-foofinal2$language[foofinal2$group==15] <- "French" 
-foofinal2$language[foofinal2$group==16] <- "Korean" 
-foofinal2$language[foofinal2$group==17] <- "Italian" 
-foofinal2$language[foofinal2$group==18] <- "Hebrew" 
-foofinal2$language[foofinal2$group==19] <- "Tamil"
+foofinal2$language[foofinal2$group==8] <- "Creoles and pidgins, English based" 
+foofinal2$language[foofinal2$group==9] <- "Creoles and pidgins" 
+foofinal2$language[foofinal2$group==10] <- "Chinese" 
+foofinal2$language[foofinal2$group==11] <- "Japanese" 
+foofinal2$language[foofinal2$group==12] <- "Polish" 
+foofinal2$language[foofinal2$group==13] <- "Russian" 
+foofinal2$language[foofinal2$group==14] <- "Arabic" 
+foofinal2$language[foofinal2$group==15] <- "Hebrew" 
+foofinal2$language[foofinal2$group==16] <- "French" 
+foofinal2$language[foofinal2$group==17] <- "Haitian" 
+foofinal2$language[foofinal2$group==18] <- "Tamil" 
 
 limits <- aes(ymax = meanpercent + sepercent, ymin=meanpercent - sepercent)
 
@@ -1373,22 +1403,22 @@ foo$Percent <- as.numeric(as.character(foo$PercentDaysPresent))
 foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" | 
                  DistrictCode=="1245" & SchoolCode=="080" |
                  DistrictCode=="1430" & SchoolCode=="105" | 
-                 DistrictCode=="1950" & SchoolCode=="055" |
-                 DistrictCode=="1950" & SchoolCode=="060" | 
+                 DistrictCode=="1430" & SchoolCode=="130" | 
                  DistrictCode=="1950" & SchoolCode=="210" |
-                 DistrictCode=="1950" & SchoolCode=="225" | 
+                 DistrictCode=="1950" & SchoolCode=="260" | 
+                 DistrictCode=="2280" & SchoolCode=="035" |
                  DistrictCode=="2280" & SchoolCode=="040" |
-                 DistrictCode=="2280" & SchoolCode=="065" | 
-                 DistrictCode=="2280" & SchoolCode=="075" |
+                 DistrictCode=="2280" & SchoolCode=="055" | 
+                 DistrictCode=="2280" & SchoolCode=="065" |
                  DistrictCode=="2580" & SchoolCode=="080" |
                  DistrictCode=="2580" & SchoolCode=="100" | 
                  DistrictCode=="3105" & SchoolCode=="301" |
-                 DistrictCode=="4255" & SchoolCode=="050" |
-                 DistrictCode=="4255" & SchoolCode=="080" |
                  DistrictCode=="4255" & SchoolCode=="110" |
                  DistrictCode=="5210" & SchoolCode=="030" |
                  DistrictCode=="5210" & SchoolCode=="050" |
                  DistrictCode=="5210" & SchoolCode=="051" |
+                 DistrictCode=="5210" & SchoolCode=="080" |
+                 DistrictCode=="5210" & SchoolCode=="100" |
                  DistrictCode=="5210" & SchoolCode=="170" |
                  DistrictCode=="5210" & SchoolCode=="190" |
                  DistrictCode=="5210" & SchoolCode=="200" |
@@ -1399,6 +1429,7 @@ foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" |
                  DistrictCode=="5210" & SchoolCode=="260" |
                  DistrictCode=="5210" & SchoolCode=="265" |
                  DistrictCode=="5210" & SchoolCode=="270" |
+                 DistrictCode=="5210" & SchoolCode=="280" |
                  DistrictCode=="5210" & SchoolCode=="300" |
                  DistrictCode=="5210" & SchoolCode=="310" |
                  DistrictCode=="5210" & SchoolCode=="401" |
@@ -1406,40 +1437,44 @@ foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" |
                  DistrictCode=="5715" & SchoolCode=="020" |
                  DistrictCode=="5715" & SchoolCode=="025" |
                  DistrictCode=="5715" & SchoolCode=="035" |
-                 DistrictCode=="5715" & SchoolCode=="040" |
+                 DistrictCode=="5715" & SchoolCode=="130" |
                  DistrictCode=="5715" & SchoolCode=="140" |
-                 DistrictCode=="5715" & SchoolCode=="150")
+                 DistrictCode=="5715" & SchoolCode=="160")
 
 #label if schools is good or bad
 foo$goodbad <- 1 #good
-foo$goodbad[foo$DistrictCode=="1950" & foo$SchoolCode=="055" | 
-              foo$DistrictCode=="1950" & foo$SchoolCode=="060" | 
-              foo$DistrictCode=="4255" & foo$SchoolCode=="050" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="030" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="050" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="051" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="170" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="190" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="200" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="210" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="230" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="235" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="240" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="260" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="265" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="270" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="300" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="310" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="401"] <- 0
+foo$goodbad[foo$DistrictCode=="5210" & foo$SchoolCode=="030" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="050" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="051" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="080" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="100" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="170" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="190" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="200" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="210" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="230" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="235" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="240" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="260" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="265" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="270" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="280" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="300" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="310" |
+                foo$DistrictCode=="5210" & foo$SchoolCode=="401" |
+              foo$DistrictCode=="5715" & foo$SchoolCode=="130"] <- 0
 
 #convert number to decimal
 foo$Percent <- foo$Percent / 100
 
+#subtract from 1
+foo$Percent2 <- 1 - foo$Percent
+
 #calculate total number of students in each grade 
 foo2 <- group_by(foo, goodbad) %>%
   summarise(
-    meanpercent = mean(Percent, na.rm = TRUE),
-    sepercent=sd(Percent, na.rm = TRUE)/sqrt(length(Percent))
+    meanpercent = mean(Percent2, na.rm = TRUE),
+    sepercent=sd(Percent2, na.rm = TRUE)/sqrt(length(Percent2))
   )
 
 limits <- aes(ymax = meanpercent + sepercent, ymin=meanpercent - sepercent)
@@ -1454,16 +1489,18 @@ ggplot(foo2,aes(x=factor(goodbad),y=meanpercent,color=factor(goodbad),fill=facto
   theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
   theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
   theme(plot.title = element_text(hjust = 0.5))+
-  scale_y_continuous(labels=percent)+
+  scale_y_continuous(labels=percent,limits=c(0,.07),breaks=seq(0,.07,.01))+
+  scale_x_discrete(name="Schools", breaks=c("0","1"), labels=c("Bottom 25%", "Top 25%"))+
   theme(legend.position = "bottom")+
   theme(text=element_text(family="Times"))+
-  scale_fill_manual(values = c("#bebad9", "#3b6dae"), name="Schools", breaks=c("0","1"), labels=c("Bottom 25%", "Top 25%"))+
+  scale_fill_manual(values = c("#bebad9", "#3b6dae"))+
   scale_color_manual(values = c("#bebad9", "#3b6dae"))+
   geom_errorbar(limits, width=0.25, color="black",position=position_dodge(width=0.9))+
-  guides(color=FALSE)
+  guides(color=FALSE,fill=FALSE)
 ```
 
-The two quartiles have same percentage of teacher attendance. Teachers overall don't miss a lot of school.
+The faculty working in the bottom 25% of schools miss more days of schools.
+
 \newpage
 
 ###Student to Staff Ratio
@@ -1491,22 +1528,22 @@ foo$AdministratorsRatio <- as.numeric(as.character(foo$AdministratorsRatio))
 foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" | 
                  DistrictCode=="1245" & SchoolCode=="080" |
                  DistrictCode=="1430" & SchoolCode=="105" | 
-                 DistrictCode=="1950" & SchoolCode=="055" |
-                 DistrictCode=="1950" & SchoolCode=="060" | 
+                 DistrictCode=="1430" & SchoolCode=="130" | 
                  DistrictCode=="1950" & SchoolCode=="210" |
-                 DistrictCode=="1950" & SchoolCode=="225" | 
+                 DistrictCode=="1950" & SchoolCode=="260" | 
+                 DistrictCode=="2280" & SchoolCode=="035" |
                  DistrictCode=="2280" & SchoolCode=="040" |
-                 DistrictCode=="2280" & SchoolCode=="065" | 
-                 DistrictCode=="2280" & SchoolCode=="075" |
+                 DistrictCode=="2280" & SchoolCode=="055" | 
+                 DistrictCode=="2280" & SchoolCode=="065" |
                  DistrictCode=="2580" & SchoolCode=="080" |
                  DistrictCode=="2580" & SchoolCode=="100" | 
                  DistrictCode=="3105" & SchoolCode=="301" |
-                 DistrictCode=="4255" & SchoolCode=="050" |
-                 DistrictCode=="4255" & SchoolCode=="080" |
                  DistrictCode=="4255" & SchoolCode=="110" |
                  DistrictCode=="5210" & SchoolCode=="030" |
                  DistrictCode=="5210" & SchoolCode=="050" |
                  DistrictCode=="5210" & SchoolCode=="051" |
+                 DistrictCode=="5210" & SchoolCode=="080" |
+                 DistrictCode=="5210" & SchoolCode=="100" |
                  DistrictCode=="5210" & SchoolCode=="170" |
                  DistrictCode=="5210" & SchoolCode=="190" |
                  DistrictCode=="5210" & SchoolCode=="200" |
@@ -1517,6 +1554,7 @@ foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" |
                  DistrictCode=="5210" & SchoolCode=="260" |
                  DistrictCode=="5210" & SchoolCode=="265" |
                  DistrictCode=="5210" & SchoolCode=="270" |
+                 DistrictCode=="5210" & SchoolCode=="280" |
                  DistrictCode=="5210" & SchoolCode=="300" |
                  DistrictCode=="5210" & SchoolCode=="310" |
                  DistrictCode=="5210" & SchoolCode=="401" |
@@ -1524,31 +1562,32 @@ foo <- subset(foo, DistrictCode=="1245" & SchoolCode=="070" |
                  DistrictCode=="5715" & SchoolCode=="020" |
                  DistrictCode=="5715" & SchoolCode=="025" |
                  DistrictCode=="5715" & SchoolCode=="035" |
-                 DistrictCode=="5715" & SchoolCode=="040" |
+                 DistrictCode=="5715" & SchoolCode=="130" |
                  DistrictCode=="5715" & SchoolCode=="140" |
-                 DistrictCode=="5715" & SchoolCode=="150")
+                 DistrictCode=="5715" & SchoolCode=="160")
 
 #label if schools is good or bad
 foo$goodbad <- 1 #good
-foo$goodbad[foo$DistrictCode=="1950" & foo$SchoolCode=="055" | 
-              foo$DistrictCode=="1950" & foo$SchoolCode=="060" | 
-              foo$DistrictCode=="4255" & foo$SchoolCode=="050" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="030" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="050" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="051" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="170" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="190" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="200" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="210" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="230" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="235" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="240" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="260" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="265" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="270" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="300" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="310" | 
-              foo$DistrictCode=="5210" & foo$SchoolCode=="401"] <- 0
+foo$goodbad[foo$DistrictCode=="5210" & foo$SchoolCode=="030" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="050" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="051" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="080" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="100" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="170" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="190" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="200" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="210" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="230" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="235" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="240" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="260" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="265" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="270" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="280" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="300" |
+                 foo$DistrictCode=="5210" & foo$SchoolCode=="310" |
+                foo$DistrictCode=="5210" & foo$SchoolCode=="401" |
+              foo$DistrictCode=="5715" & foo$SchoolCode=="130"] <- 0
 
 #calculate total number of students in each grade 
 foo2 <- group_by(foo, goodbad) %>%

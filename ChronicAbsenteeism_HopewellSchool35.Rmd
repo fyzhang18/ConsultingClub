@@ -1,0 +1,258 @@
+---
+title: "Chronic Absenteeism - Princeton school 50"
+author: "Felicia Zhang"
+date: '2018-06-03'
+output: pdf_document
+toc: yes
+toc_depth: 2
+fontsize: 12pt
+fig_height: 6
+fig_width: 7
+---
+
+```{r setup, include=FALSE, warning=FALSE}
+library(ggplot2) 
+library(zoo)
+library(reshape)
+library(plyr)
+library(dplyr)
+library(scales) 
+library(data.table)
+library(signal)
+library(matrixStats)
+library(lme4)
+library(arm)
+library(broom)
+library(tidyr)
+library(knitr)
+library(wesanderson)
+library(readxl)    
+library(extrafont)
+
+#LOAD MULTIPLE EXCEL SHEETS INTO SEPARATE DFS
+#2015-2016 school year
+
+#get names of sheets
+sheets <- readxl::excel_sheets("~/Documents/Felicia Zhang/Felicia/Princeton/ConsultingClub/ChronicAbsenteeism/20152016_SchoolData.xlsx")
+
+#load in excel data as 1 big file
+lst <- lapply(sheets, function(sheet) 
+  readxl::read_excel("~/Documents/Felicia Zhang/Felicia/Princeton/ConsultingClub/ChronicAbsenteeism/20152016_SchoolData.xlsx", sheet = sheet)
+)
+
+#prepare names
+names(lst) <- sheets
+
+#turn it into DF
+list2env(lst, envir = .GlobalEnv)
+
+#2016-2017 school year
+
+#get names of sheets
+sheets <- readxl::excel_sheets("~/Documents/Felicia Zhang/Felicia/Princeton/ConsultingClub/ChronicAbsenteeism/20162017_SchoolData.xlsx")
+
+#load in excel data as 1 big file
+lst <- lapply(sheets, function(sheet) 
+  readxl::read_excel("~/Documents/Felicia Zhang/Felicia/Princeton/ConsultingClub/ChronicAbsenteeism/20162017_SchoolData.xlsx", sheet = sheet)
+)
+
+#prepare names
+names(lst) <- sheets
+
+#turn it into DF
+list2env(lst, envir = .GlobalEnv)
+```
+
+Focusing on Mercer County, Princeton District, School 50, because they have a dramatic increase in chronic absenteeism from 2015-2016 to 2016-2017 school year. From 12% to 32%
+
+#Enrollment
+##Racial group
+```{r, echo=FALSE, warning=FALSE}
+foo1516 <- subset(`1516_EnrollmentByRace`,COUNTY_CODE=="21" & DISTRICT_CODE=="4255" & SCHOOL_CODE=="050")
+foo1516 <- t(foo1516)
+foo1617 <- subset(EnrollmentByRacialEthnicGroup,CountyCode=="21" & DistrictCode=="4255" & SchoolCode=="050")
+foo1617$year <- 1617
+
+foofinal <- foo1617
+foofinal <- rbind(foofinal,foo1617)
+foofinal$year[8:14] <- 1516
+foofinal$Percent[8:14] <- foo1516[4:10]
+
+foofinal$CountyCode <- as.numeric(as.character(foofinal$CountyCode))
+foofinal$DistrictCode <- as.numeric(as.character(foofinal$DistrictCode))
+foofinal$SchoolCode <- as.numeric(as.character(foofinal$SchoolCode))
+foofinal$Percent <- as.numeric(as.character(foofinal$Percent))
+foofinal$Percent <- foofinal$Percent/100
+
+foofinal2 <- subset(foofinal, RacialAndEthnicGroup != "American Indian or Alaska Native" & RacialAndEthnicGroup != "Native Hawaiian or Pacific Islander")
+
+ggplot(foofinal2,aes(x=factor(RacialAndEthnicGroup),y=Percent,color=factor(year),fill=factor(year)))+
+  geom_bar(stat="identity",position ="dodge")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Race", y = "Percent of students")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0.5))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  scale_y_continuous(labels=percent,limits=c(0,.7),breaks=seq(0,.7,.05))+  
+  theme(legend.position = "bottom")+
+  guides(color=FALSE)+
+  scale_fill_manual(values = wes_palette("GrandBudapest2"),name="School year", breaks=c("1516","1617"), labels=c("15/16", "16/17"))+
+  scale_color_manual(values = wes_palette("GrandBudapest2"))+
+  theme(text=element_text(family="Times"))
+
+```
+
+##Student group
+```{r, echo=FALSE, warning=FALSE}
+foo1516 <- subset(`1516_EnrollmentBySpecPop`,COUNTY_CODE=="21" & DISTRICT_CODE=="4255" & SCHOOL_CODE=="050")
+foo1516 <- t(foo1516)
+foo1617 <- subset(EnrollmentTrendsByStudentGroup,CountyCode=="21" & DistrictCode=="4255" & SchoolCode=="050")
+foo1617$year <- 1617
+foo1617 <- subset(foo1617, StudentGroup =="Economically Disadvantaged Students" | StudentGroup =="Students with Disabilities")
+
+foofinal <- foo1617
+foofinal <- rbind(foofinal,foo1617)
+foofinal$year[3:4] <- 1516
+foofinal$Percent[3] <- foo1516[5]
+foofinal$Percent[4] <- foo1516[4]
+
+foofinal$CountyCode <- as.numeric(as.character(foofinal$CountyCode))
+foofinal$DistrictCode <- as.numeric(as.character(foofinal$DistrictCode))
+foofinal$SchoolCode <- as.numeric(as.character(foofinal$SchoolCode))
+foofinal$Percent <- as.numeric(as.character(foofinal$Percent))
+foofinal$Percent <- foofinal$Percent/100
+
+ggplot(foofinal,aes(x=factor(StudentGroup),y=Percent,color=factor(year),fill=factor(year)))+
+  geom_bar(stat="identity",position ="dodge")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Student group", y = "Percent of students")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0.5))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  scale_y_continuous(labels=percent,limits=c(0,.2),breaks=seq(0,.2,.05))+  
+  theme(legend.position = "bottom")+
+  guides(color=FALSE)+
+  scale_fill_manual(values = wes_palette("GrandBudapest2"),name="School year", breaks=c("1516","1617"), labels=c("15/16", "16/17"))+
+  scale_color_manual(values = wes_palette("GrandBudapest2"))+
+  theme(text=element_text(family="Times"))
+
+```
+
+##Grade
+```{r, echo=FALSE, warning=FALSE}
+foo1516 <- subset(`1516_EnrollmentByGrade`,COUNTY_CODE=="21" & DISTRICT_CODE=="4255" & SCHOOL_CODE=="050")
+foo1516 <- t(foo1516)
+foo1617 <- subset(EnrollmentTrendsByGrade,CountyCode=="21" & DistrictCode=="4255" & SchoolCode=="050")
+foo1617$year <- 1617
+
+foofinal <- foo1617
+foofinal <- rbind(foofinal,foo1617)
+foofinal$year[7:12] <- 1516
+foofinal$Count[7:12] <- foo1516[14:19]
+
+foofinal$CountyCode <- as.numeric(as.character(foofinal$CountyCode))
+foofinal$DistrictCode <- as.numeric(as.character(foofinal$DistrictCode))
+foofinal$SchoolCode <- as.numeric(as.character(foofinal$SchoolCode))
+foofinal$Count <- as.numeric(as.character(foofinal$Count))
+
+foofinal2 <- subset(foofinal, Grade !="Ungraded")
+
+ggplot(foofinal2,aes(x=factor(Grade),y=Count,color=factor(year),fill=factor(year)))+
+  geom_bar(stat="identity",position ="dodge")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Grade", y = "Number of students")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0.5))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(legend.position = "bottom")+
+  guides(color=FALSE)+
+  scale_fill_manual(values = wes_palette("GrandBudapest2"),name="School year", breaks=c("1516","1617"), labels=c("15/16", "16/17"))+
+  scale_color_manual(values = wes_palette("GrandBudapest2"))+
+  theme(text=element_text(family="Times"))
+
+```
+
+## Gender
+```{r, echo=FALSE, warning=FALSE}
+foo1516 <- subset(`1516_EnrollmentByGender`,COUNTY_CODE=="21" & DISTRICT_CODE=="4255" & SCHOOL_CODE=="050")
+foo1516 <- t(foo1516)
+foo1617 <- subset(EnrollmentTrendsByStudentGroup,CountyCode=="21" & DistrictCode=="4255" & SchoolCode=="050")
+foo1617$year <- 1617
+foo1617 <- subset(foo1617, StudentGroup =="Female" | StudentGroup =="Male")
+
+foofinal <- foo1617
+foofinal <- rbind(foofinal,foo1617)
+foofinal$year[3:4] <- 1516
+foofinal$Percent[3:4] <- foo1516[4:5]
+
+foofinal$CountyCode <- as.numeric(as.character(foofinal$CountyCode))
+foofinal$DistrictCode <- as.numeric(as.character(foofinal$DistrictCode))
+foofinal$SchoolCode <- as.numeric(as.character(foofinal$SchoolCode))
+foofinal$Percent <- as.numeric(as.character(foofinal$Percent))
+
+foofinal$Percent <- foofinal$Percent/100
+
+ggplot(foofinal,aes(x=factor(StudentGroup),y=Percent,color=factor(year),fill=factor(year)))+
+  geom_bar(stat="identity",position ="dodge")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Gender", y = "Percent of students")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0.5))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  scale_y_continuous(labels=percent,limits=c(0,.6),breaks=seq(0,.6,.05))+  
+  theme(legend.position = "bottom")+
+  guides(color=FALSE)+
+  scale_fill_manual(values = wes_palette("GrandBudapest2"),name="School year", breaks=c("1516","1617"), labels=c("15/16", "16/17"))+
+  scale_color_manual(values = wes_palette("GrandBudapest2"))+
+  theme(text=element_text(family="Times"))
+
+```
+
+## Language
+```{r, echo=FALSE, warning=FALSE}
+foo1516 <- subset(`1516_LanguageDiversity`,COUNTY_CODE=="21" & DISTRICT_CODE=="4255" & SCHOOL_CODE=="050")
+foo1516$year <- 1516
+foo1617 <- subset(EnrollmentByHomeLanguage,CountyCode=="21" & DistrictCode=="4255" & SchoolCode=="050")
+foo1617$year <- 1617
+
+foofinal <- foo1617
+foofinal <- rbind(foofinal,foo1617)
+foofinal$year[6:10] <- 1516
+foofinal$`%OfStudents`[6] <- foo1516$PCT_LANG[2]
+foofinal$`%OfStudents`[7] <- foo1516$PCT_LANG[1]
+foofinal$`%OfStudents`[8] <- foo1516$PCT_LANG[3]
+foofinal$`%OfStudents`[9] <- foo1516$PCT_LANG[5]
+foofinal$`%OfStudents`[10] <- foo1516$PCT_LANG[6]
+
+foofinal$CountyCode <- as.numeric(as.character(foofinal$CountyCode))
+foofinal$DistrictCode <- as.numeric(as.character(foofinal$DistrictCode))
+foofinal$SchoolCode <- as.numeric(as.character(foofinal$SchoolCode))
+foofinal$`%OfStudents` <- as.numeric(as.character(foofinal$`%OfStudents`))
+
+foofinal$`%OfStudents` <- foofinal$`%OfStudents`/100
+
+ggplot(foofinal,aes(x=factor(HomeLanguage),y=`%OfStudents`,color=factor(year),fill=factor(year)))+
+  geom_bar(stat="identity",position ="dodge")+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Home Language", y = "Percent of students")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0.5))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  scale_y_continuous(labels=percent,limits=c(0,.9),breaks=seq(0,.9,.05))+  
+  theme(legend.position = "bottom")+
+  guides(color=FALSE)+
+  scale_fill_manual(values = wes_palette("GrandBudapest2"),name="School year", breaks=c("1516","1617"), labels=c("15/16", "16/17"))+
+  scale_color_manual(values = wes_palette("GrandBudapest2"))+
+  theme(text=element_text(family="Times"))
+
+```

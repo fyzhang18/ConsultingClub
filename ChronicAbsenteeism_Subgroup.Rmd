@@ -1,0 +1,415 @@
+---
+title: "Chronic Absenteeism - Subgroup analysis"
+author: "Felicia Zhang"
+date: '2018-07-03'
+output: pdf_document
+toc: yes
+toc_depth: 2
+fontsize: 12pt
+fig_height: 6
+fig_width: 7
+---
+
+```{r setup, include=FALSE, warning=FALSE}
+library(ggplot2) 
+library(zoo)
+library(reshape)
+library(plyr)
+library(dplyr)
+library(scales) 
+library(data.table)
+library(signal)
+library(matrixStats)
+library(lme4)
+library(arm)
+library(broom)
+library(tidyr)
+library(knitr)
+library(wesanderson)
+library(readxl)    
+library(extrafont)
+
+#LOAD MULTIPLE EXCEL SHEETS INTO SEPARATE DFS
+
+#get names of sheets
+sheets <- readxl::excel_sheets("~/Documents/Felicia Zhang/Felicia/Princeton/ConsultingClub/ChronicAbsenteeism/20162017_SchoolData.xlsx")
+
+#load in excel data as 1 big file
+lst <- lapply(sheets, function(sheet) 
+  readxl::read_excel("~/Documents/Felicia Zhang/Felicia/Princeton/ConsultingClub/ChronicAbsenteeism/20162017_SchoolData.xlsx", sheet = sheet)
+)
+
+#prepare names
+names(lst) <- sheets
+
+#turn it into DF
+list2env(lst, envir = .GlobalEnv)
+
+#subgroup analysis: using the demographics, show distributions, ratio bw whites and blacks, anything to look at inequality
+```
+
+```{r, echo=FALSE, warning=FALSE, include=FALSE}
+###Create Chronic Absenteeism percent for each grade, each school, and each district
+
+#*SchoolPercent is n of students absent/n of students in the grade NOT n of students absent/n of students in the school -_-
+
+poo <- ChronicAbsenteeism
+
+#keep only schoolwide data
+poo <- subset(poo, StudentGroup=="Schoolwide")
+
+#create school data
+AbsentSchool <- poo[1:4]
+
+#label missing values as NA
+AbsentSchool[AbsentSchool == "N"] <- NA
+AbsentSchool[AbsentSchool == "*"] <- NA
+
+#convert all columns to numeric
+AbsentSchool[] <- lapply(AbsentSchool, function(x) as.numeric(as.character(x)))
+
+#convert GradePercent to decimal
+AbsentSchool$percentabsent <- AbsentSchool$SchoolPercent/100
+
+#get percent absent for each district
+AbsentDistrict <- group_by(AbsentSchool,CountyCode,DistrictCode) %>%
+  summarise(
+    percentabsent = mean(percentabsent, na.rm = TRUE)
+  )
+
+#Mercer county = 21
+Mercer <- subset(AbsentSchool, CountyCode==21)
+```
+
+Important note:  
+All graphs are based on 2016-2017 school year
+
+\newpage
+##Correlations 
+
+###Chronic absenteeism and racial groups
+```{r, echo=FALSE, warning=FALSE,fig.width=10}
+#sort schools by race (Black, White, Hispanic, Asian)
+poo <- subset(EnrollmentByRacialEthnicGroup, CountyCode=="21") 
+poo$CountyCode <- as.numeric(as.character(poo$CountyCode))
+poo$DistrictCode <- as.numeric(as.character(poo$DistrictCode))
+poo$SchoolCode <- as.numeric(as.character(poo$SchoolCode))
+poo$RacePercent <- as.numeric(as.character(poo$Percent))
+
+poofinal <- merge(poo, Mercer, by=c("CountyCode","DistrictCode","SchoolCode"))
+
+poofinal$SchoolPercent <- poofinal$SchoolPercent /100
+poofinal$RacePercent <- poofinal$RacePercent /100
+
+poofinal <- na.omit(poofinal)
+
+ggplot(poofinal,aes(x=RacePercent,y=SchoolPercent))+
+  geom_point(size=4)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Percentage of students in school", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(text=element_text(family="Times"))+
+  theme(legend.position = "none")+
+  facet_wrap(~RacialAndEthnicGroup)+
+  theme(strip.text = element_text(size=14))+
+  stat_smooth(method=lm, se = FALSE)+
+  scale_x_continuous(labels=percent)+
+  scale_y_continuous(labels=percent)
+
+#only focus on Asian, African American, White, Hispanic
+poofinal2 <- subset(poofinal, RacialAndEthnicGroup== "Asian" | RacialAndEthnicGroup=="Black or African American" | RacialAndEthnicGroup== "Hispanic" | RacialAndEthnicGroup== "White")
+
+ggplot(poofinal2,aes(x=RacePercent,y=SchoolPercent))+
+  geom_point(size=4)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Percentage of students in school", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(text=element_text(family="Times"))+
+  theme(legend.position = "none")+
+  facet_wrap(~RacialAndEthnicGroup)+
+  theme(strip.text = element_text(size=14))+
+  stat_smooth(method=lm, se = FALSE)+
+  scale_x_continuous(labels=percent)+
+  scale_y_continuous(labels=percent)
+```
+Chronic absenteeism is correlated with percentage of Black/African American students in a school compared to any other race.
+
+\newpage
+
+###Chronic absenteeism and SES groups
+```{r, echo=FALSE, warning=FALSE,fig.width=10}
+#sort schools by SES
+poo <- subset(EnrollmentTrendsByStudentGroup, CountyCode=="21") 
+poo$CountyCode <- as.numeric(as.character(poo$CountyCode))
+poo$DistrictCode <- as.numeric(as.character(poo$DistrictCode))
+poo$SchoolCode <- as.numeric(as.character(poo$SchoolCode))
+poo$SESPercent <- as.numeric(as.character(poo$Percent))
+
+poofinal <- merge(poo, Mercer, by=c("CountyCode","DistrictCode","SchoolCode"))
+
+poofinal$SchoolPercent <- poofinal$SchoolPercent /100
+poofinal$SESPercent <- poofinal$SESPercent /100
+
+poofinal <- na.omit(poofinal)
+
+ggplot(poofinal,aes(x=SESPercent,y=SchoolPercent))+
+  geom_point(size=4)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Percentage of students in school", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(text=element_text(family="Times"))+
+  theme(legend.position = "none")+
+  facet_wrap(~StudentGroup)+
+  theme(strip.text = element_text(size=14))+
+  stat_smooth(method=lm, se = FALSE)+
+  scale_x_continuous(labels=percent)+
+  scale_y_continuous(labels=percent)
+
+#only focus on 
+poofinal2 <- subset(poofinal, StudentGroup== "Economically Disadvantaged Students" | StudentGroup=="English Learners")
+
+ggplot(poofinal2,aes(x=SESPercent,y=SchoolPercent))+
+  geom_point(size=4)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Percentage of students in school", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(text=element_text(family="Times"))+
+  theme(legend.position = "none")+
+  facet_wrap(~StudentGroup)+
+  theme(strip.text = element_text(size=14))+
+  stat_smooth(method=lm, se = FALSE)+
+  scale_x_continuous(labels=percent)+
+  scale_y_continuous(labels=percent)
+
+```
+Chronic absenteeism is correlated with percentage of low SES and English Learners in a school.
+
+\newpage
+
+###Chronic absenteeism and home language
+```{r, echo=FALSE, warning=FALSE,fig.width=10}
+#sort schools by language
+poo <- subset(EnrollmentByHomeLanguage, CountyCode=="21") 
+poo$CountyCode <- as.numeric(as.character(poo$CountyCode))
+poo$DistrictCode <- as.numeric(as.character(poo$DistrictCode))
+poo$SchoolCode <- as.numeric(as.character(poo$SchoolCode))
+poo$LangPercent <- as.numeric(as.character(poo$`%OfStudents`))
+
+poofinal <- merge(poo, Mercer, by=c("CountyCode","DistrictCode","SchoolCode"))
+
+poofinal$SchoolPercent <- poofinal$SchoolPercent /100
+poofinal$LangPercent <- poofinal$LangPercent /100
+
+poofinal <- na.omit(poofinal)
+
+#only focus on English, Spanish
+poofinal2 <- subset(poofinal, HomeLanguage== "English" | HomeLanguage=="Spanish")
+
+ggplot(poofinal2,aes(x=LangPercent,y=SchoolPercent))+
+  geom_point(size=4)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Percentage of students in school", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(text=element_text(family="Times"))+
+  theme(legend.position = "none")+
+  facet_wrap(~HomeLanguage)+
+  theme(strip.text = element_text(size=14))+
+  stat_smooth(method=lm, se = FALSE)+
+  scale_x_continuous(labels=percent)+
+  scale_y_continuous(labels=percent)
+
+```
+Chronic absenteeism is correlated with speaking Spanish at home.
+
+\newpage
+
+##Distributions 
+
+###Chronic absenteeism and racial groups
+```{r, echo=FALSE, warning=FALSE,fig.width=10}
+#sort schools by race (Black, White, Hispanic, Asian)
+poo <- subset(EnrollmentByRacialEthnicGroup, CountyCode=="21") 
+poo$CountyCode <- as.numeric(as.character(poo$CountyCode))
+poo$DistrictCode <- as.numeric(as.character(poo$DistrictCode))
+poo$SchoolCode <- as.numeric(as.character(poo$SchoolCode))
+poo$RacePercent <- as.numeric(as.character(poo$Percent))
+
+poofinal <- merge(poo, Mercer, by=c("CountyCode","DistrictCode","SchoolCode"))
+
+poofinal$SchoolPercent <- poofinal$SchoolPercent /100
+poofinal$RacePercent <- poofinal$RacePercent /100
+
+poofinal <- na.omit(poofinal)
+
+poofinal$CA <- 0
+poofinal$CA[poofinal$SchoolPercent > 0.1] <- 1
+
+ggplot(poofinal, aes(RacePercent, fill = factor(CA)))+
+  geom_histogram(binwidth=.05)+
+  facet_wrap(~RacialAndEthnicGroup)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Percentage of students in school", y = "Count")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(text=element_text(family="Times"))+
+  theme(legend.position = "bottom")+
+  theme(strip.text = element_text(size=14))+
+  scale_x_continuous(labels=percent)+
+  scale_fill_manual(values = c("#bebad9", "#3b6dae"), name="Chronic absenteeism", breaks=c("0","1"), labels=c("No", "Yes"))
+
+#only focus on Asian, African American, White, Hispanic
+poofinal2 <- subset(poofinal, RacialAndEthnicGroup== "Asian" | RacialAndEthnicGroup=="Black or African American" | RacialAndEthnicGroup== "Hispanic" | RacialAndEthnicGroup== "White")
+
+ggplot(poofinal2, aes(RacePercent, fill = factor(CA)))+
+  geom_histogram(binwidth=.05)+
+  facet_wrap(~RacialAndEthnicGroup)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Percentage of students in school", y = "Count")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(text=element_text(family="Times"))+
+  theme(legend.position = "bottom")+
+  theme(strip.text = element_text(size=14))+
+  scale_x_continuous(labels=percent)+
+  scale_fill_manual(values = c("#bebad9", "#3b6dae"), name="Chronic absenteeism", breaks=c("0","1"), labels=c("No", "Yes"))
+```
+
+\newpage
+
+###Chronic absenteeism and SES groups
+```{r, echo=FALSE, warning=FALSE,fig.width=10}
+#sort schools by SES
+poo <- subset(EnrollmentTrendsByStudentGroup, CountyCode=="21") 
+poo$CountyCode <- as.numeric(as.character(poo$CountyCode))
+poo$DistrictCode <- as.numeric(as.character(poo$DistrictCode))
+poo$SchoolCode <- as.numeric(as.character(poo$SchoolCode))
+poo$SESPercent <- as.numeric(as.character(poo$Percent))
+
+poofinal <- merge(poo, Mercer, by=c("CountyCode","DistrictCode","SchoolCode"))
+
+poofinal$SchoolPercent <- poofinal$SchoolPercent /100
+poofinal$SESPercent <- poofinal$SESPercent /100
+
+poofinal <- na.omit(poofinal)
+
+poofinal$CA <- 0
+poofinal$CA[poofinal$SchoolPercent > 0.1] <- 1
+
+ggplot(poofinal, aes(SESPercent, fill = factor(CA)))+
+  geom_histogram(binwidth=.05)+
+  facet_wrap(~StudentGroup)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Percentage of students in school", y = "Count")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(text=element_text(family="Times"))+
+  theme(legend.position = "bottom")+
+  theme(strip.text = element_text(size=14))+
+  scale_x_continuous(labels=percent)+
+  scale_fill_manual(values = c("#bebad9", "#3b6dae"), name="Chronic absenteeism", breaks=c("0","1"), labels=c("No", "Yes"))
+
+#only focus on
+poofinal2 <- subset(poofinal, StudentGroup== "Economically Disadvantaged Students" | StudentGroup=="English Learners")
+
+ggplot(poofinal2, aes(SESPercent, fill = factor(CA)))+
+  geom_histogram(binwidth=.05)+
+  facet_wrap(~StudentGroup)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Percentage of students in school", y = "Count")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(text=element_text(family="Times"))+
+  theme(legend.position = "bottom")+
+  theme(strip.text = element_text(size=14))+
+  scale_x_continuous(labels=percent)+
+  scale_fill_manual(values = c("#bebad9", "#3b6dae"), name="Chronic absenteeism", breaks=c("0","1"), labels=c("No", "Yes"))
+```
+
+\newpage
+
+###Chronic absenteeism and home language
+```{r, echo=FALSE, warning=FALSE,fig.width=10}
+#sort schools by language
+poo <- subset(EnrollmentByHomeLanguage, CountyCode=="21") 
+poo$CountyCode <- as.numeric(as.character(poo$CountyCode))
+poo$DistrictCode <- as.numeric(as.character(poo$DistrictCode))
+poo$SchoolCode <- as.numeric(as.character(poo$SchoolCode))
+poo$LangPercent <- as.numeric(as.character(poo$`%OfStudents`))
+
+poofinal <- merge(poo, Mercer, by=c("CountyCode","DistrictCode","SchoolCode"))
+
+poofinal$SchoolPercent <- poofinal$SchoolPercent /100
+poofinal$LangPercent <- poofinal$LangPercent /100
+
+poofinal$CA <- 0
+poofinal$CA[poofinal$SchoolPercent > 0.1] <- 1
+
+#only focus on English, Spanish
+poofinal2 <- subset(poofinal, HomeLanguage== "English" | HomeLanguage=="Spanish")
+
+ggplot(poofinal, aes(LangPercent, fill = factor(CA)))+
+  geom_histogram(binwidth=.05)+
+  facet_wrap(~HomeLanguage)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Percentage of students in school", y = "Count")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=12),axis.text.y  = element_text(size=12))+
+  theme(legend.text=element_text(size=12),legend.title=element_text(size=12))+
+  theme(text=element_text(family="Times"))+
+  theme(legend.position = "bottom")+
+  theme(strip.text = element_text(size=12))+
+  scale_x_continuous(labels=percent)+
+  scale_fill_manual(values = c("#bebad9", "#3b6dae"), name="Chronic absenteeism", breaks=c("0","1"), labels=c("No", "Yes"))
+
+ggplot(poofinal2, aes(LangPercent, fill = factor(CA)))+
+  geom_histogram(binwidth=.05)+
+  facet_wrap(~HomeLanguage)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  labs(x = "Percentage of students in school", y = "Count")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(text=element_text(family="Times"))+
+  theme(legend.position = "bottom")+
+  theme(strip.text = element_text(size=14))+
+  scale_x_continuous(labels=percent)+
+  scale_fill_manual(values = c("#bebad9", "#3b6dae"), name="Chronic absenteeism", breaks=c("0","1"), labels=c("No", "Yes"))
+```
+
+\newpage
