@@ -109,7 +109,7 @@ Important notes:
 2. For the school years 10/11 and earlier, we do not chronic absenteeism rate. Instead, we have attendance, so chronic absenteeism rate was calculated using 1 - attendance %.  
 
 \newpage
-
+# 2001/2002 - 2016/2017
 ## Trend analysis for Mercer County
 ```{r, echo=FALSE, warning=FALSE}
 #group schools in each district together
@@ -121,6 +121,7 @@ mercertotal <- group_by(mercer, DISTRICT_CODE, YEAR) %>%
 
 ggplot(mercertotal,aes(x=YEAR,y=meanPercentabsent,group=DISTRICT_CODE, color=factor(DISTRICT_CODE)))+
   geom_line(size=2)+
+  geom_point(size=5)+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
   ggtitle("\n\nMercer County")+
@@ -146,6 +147,7 @@ ggplot(mercertotal,aes(x=YEAR,y=meanPercentabsent,group=DISTRICT_CODE, color=fac
 # East windsor
 ggplot(eastwind,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor(SCHOOL_CODE)))+
   geom_line(size=2)+
+  geom_point(size=5)+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
   ggtitle("\n\nEast Windsor")+
@@ -171,6 +173,7 @@ ggplot(eastwind,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=fac
 # Ewing
 ggplot(ewing,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor(SCHOOL_CODE)))+
   geom_line(size=2)+
+  geom_point(size=5)+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
   ggtitle("\n\nEwing")+
@@ -195,6 +198,7 @@ ggplot(ewing,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor
 # hamilton
 ggplot(hamilton,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor(SCHOOL_CODE)))+
   geom_line(size=2)+
+  geom_point(size=5)+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
   ggtitle("\n\nHamilton")+
@@ -219,6 +223,7 @@ ggplot(hamilton,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=fac
 # hopewell
 ggplot(hopewell,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor(SCHOOL_CODE)))+
   geom_line(size=2)+
+  geom_point(size=5)+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
   ggtitle("\n\nHopewell")+
@@ -242,6 +247,7 @@ ggplot(hopewell,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=fac
 # lawrence
 ggplot(lawrence,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor(SCHOOL_CODE)))+
   geom_line(size=2)+
+  geom_point(size=5)+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
   ggtitle("\n\nLawrence")+
@@ -264,8 +270,10 @@ ggplot(lawrence,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=fac
 ### Mercer County Vocational
 ```{r, echo=FALSE, warning=FALSE}
 # mercer vocational
+mercervo <- na.omit(mercervo)
 ggplot(mercervo,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor(SCHOOL_CODE)))+
   geom_line(size=2)+
+  geom_point(size=5)+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
   ggtitle("\n\nMercer County Vocational")+
@@ -288,8 +296,10 @@ ggplot(mercervo,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=fac
 ### Mercer County Special Service
 ```{r, echo=FALSE, warning=FALSE}
 # mercer special service
+mercerss <- na.omit(mercerss)
 ggplot(mercerss,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor(SCHOOL_CODE)))+
   geom_line(size=2)+
+  geom_point(size=5)+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
   ggtitle("\n\nMercer County Special Service")+
@@ -315,6 +325,7 @@ ggplot(mercerss,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=fac
 # princeton
 ggplot(princeton,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor(SCHOOL_CODE)))+
   geom_line(size=2)+
+  geom_point(size=5)+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
   ggtitle("\n\nPrinceton")+
@@ -339,6 +350,7 @@ ggplot(princeton,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=fa
 # trenton
 ggplot(trenton,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor(SCHOOL_CODE)))+
   geom_line(size=2)+
+  geom_point(size=5)+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
   ggtitle("\n\nTrenton")+
@@ -363,6 +375,7 @@ ggplot(trenton,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=fact
 # robbins
 ggplot(robbins,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor(SCHOOL_CODE)))+
   geom_line(size=2)+
+  geom_point(size=5)+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
   ggtitle("\n\nRobbinsville")+
@@ -387,6 +400,7 @@ ggplot(robbins,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=fact
 # Windsor-Plainsboro
 ggplot(winplain,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor(SCHOOL_CODE)))+
   geom_line(size=2)+
+  geom_point(size=5)+
   theme_bw()+
   theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
   ggtitle("\n\nWindsor-Plainsboro")+
@@ -406,7 +420,310 @@ ggplot(winplain,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=fac
 ```
 \newpage
 
-## Summary
+# 2012/2013 - 2016/2017
+## Trend analysis for Mercer County
+```{r, echo=FALSE, warning=FALSE}
+#group schools in each district together
+mercertotal <- group_by(mercer, DISTRICT_CODE, YEAR) %>%
+  summarise(
+    meanPercentabsent = mean(PERCENT_CHRONIC_ABSENT, na.rm = TRUE),
+    sePercentabsent=sd(PERCENT_CHRONIC_ABSENT, na.rm = TRUE)/sqrt(length(PERCENT_CHRONIC_ABSENT))
+  )
 
-East Windsor - School 60 increased in 2012/2013
+goo <- subset(mercertotal, YEAR %in% c("20122013", "20132014", "20142015","20152016","20162017"))
+
+ggplot(goo,aes(x=YEAR,y=meanPercentabsent,group=DISTRICT_CODE, color=factor(DISTRICT_CODE)))+
+  geom_line(size=2)+
+  geom_point(size=5)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nMercer County")+
+  labs(x = "School year", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_x_discrete(breaks=c("20122013","20132014","20142015","20152016","20162017"),labels=c("12/13","13/14","14/15","15/16","16/17"))+
+  scale_y_continuous(labels=percent,limits=c(0,.3),breaks=seq(0,.3,.05))+
+  scale_color_discrete(name="District",breaks=c("1245","1430","1950","2280","2580","3103","3105","4255","5210","5510","5715"),labels=c("East Windsor", "Ewing","Hamilton","Hopewell", "Lawrence","Special Service","Vocational","Princeton","Trenton", "Robbinsville","Windsor-Plainsboro"))+
+  theme(text=element_text(family="Times"))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  theme(legend.position = "bottom")
+```
+\newpage
+
+## Trend analysis for each district in Mercer County
+
+### East Windsor
+```{r, echo=FALSE, warning=FALSE}
+# East windsor
+goo <- subset(eastwind, YEAR %in% c("20122013", "20132014", "20142015","20152016","20162017"))
+
+ggplot(goo,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor(SCHOOL_CODE)))+
+  geom_line(size=2)+
+  geom_point(size=5)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nEast Windsor")+
+  labs(x = "School year", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_x_discrete(breaks=c("20122013","20132014","20142015","20152016","20162017"),labels=c("12/13","13/14","14/15","15/16","16/17"))+
+  scale_y_continuous(labels=percent,limits=c(0,.16),breaks=seq(0,.16,.02))+
+  scale_color_discrete(name="School")+
+  theme(text=element_text(family="Times"))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  theme(legend.position = "bottom")
+
+```
+\newpage
+
+### Ewing
+
+```{r, echo=FALSE, warning=FALSE}
+# Ewing
+goo <- subset(ewing, YEAR %in% c("20122013", "20132014", "20142015","20152016","20162017"))
+
+ggplot(goo,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor(SCHOOL_CODE)))+
+  geom_line(size=2)+
+  geom_point(size=5)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nEwing")+
+  labs(x = "School year", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_x_discrete(breaks=c("20122013","20132014","20142015","20152016","20162017"),labels=c("12/13","13/14","14/15","15/16","16/17"))+
+  scale_y_continuous(labels=percent,limits=c(0,.16),breaks=seq(0,.16,.02))+
+  scale_color_discrete(name="School")+
+  theme(text=element_text(family="Times"))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  theme(legend.position = "bottom")
+
+```
+\newpage
+
+### Hamilton
+```{r, echo=FALSE, warning=FALSE,fig.height=7}
+# hamilton
+goo <- subset(hamilton, YEAR %in% c("20122013", "20132014", "20142015","20152016","20162017"))
+
+ggplot(goo,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor(SCHOOL_CODE)))+
+  geom_line(size=2)+
+  geom_point(size=5)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nHamilton")+
+  labs(x = "School year", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_x_discrete(breaks=c("20122013","20132014","20142015","20152016","20162017"),labels=c("12/13","13/14","14/15","15/16","16/17"))+
+  scale_y_continuous(labels=percent,limits=c(0,.3),breaks=seq(0,.3,.05))+
+  scale_color_discrete(name="School")+
+  theme(text=element_text(family="Times"))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  theme(legend.position = "bottom")
+
+```
+\newpage
+
+### Hopewell
+```{r, echo=FALSE, warning=FALSE}
+# hopewell
+goo <- subset(hopewell, YEAR %in% c("20122013", "20132014", "20142015","20152016","20162017"))
+
+ggplot(goo,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor(SCHOOL_CODE)))+
+  geom_line(size=2)+
+  geom_point(size=5)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nHopewell")+
+  labs(x = "School year", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_x_discrete(breaks=c("20122013","20132014","20142015","20152016","20162017"),labels=c("12/13","13/14","14/15","15/16","16/17"))+
+  scale_y_continuous(labels=percent,limits=c(0,.2),breaks=seq(0,.2,.02))+
+  scale_color_discrete(name="School")+
+  theme(text=element_text(family="Times"))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  theme(legend.position = "bottom")
+```
+\newpage
+
+### Lawrence
+```{r, echo=FALSE, warning=FALSE}
+# lawrence
+goo <- subset(lawrence, YEAR %in% c("20122013", "20132014", "20142015","20152016","20162017"))
+
+ggplot(goo,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor(SCHOOL_CODE)))+
+  geom_line(size=2)+
+  geom_point(size=5)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nLawrence")+
+  labs(x = "School year", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_x_discrete(breaks=c("20122013","20132014","20142015","20152016","20162017"),labels=c("12/13","13/14","14/15","15/16","16/17"))+
+  scale_y_continuous(labels=percent,limits=c(0,.2),breaks=seq(0,.2,.02))+
+  scale_color_discrete(name="School")+
+  theme(text=element_text(family="Times"))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  theme(legend.position = "bottom")
+
+```
+\newpage
+
+### Mercer County Vocational
+```{r, echo=FALSE, warning=FALSE}
+# mercer vocational
+goo <- subset(mercervo, YEAR %in% c("20122013", "20132014", "20142015","20152016","20162017"))
+
+ggplot(goo,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor(SCHOOL_CODE)))+
+  geom_line(size=2)+
+  geom_point(size=5)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nMercer County Vocational")+
+  labs(x = "School year", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_x_discrete(breaks=c("20122013","20132014","20142015","20152016","20162017"),labels=c("12/13","13/14","14/15","15/16","16/17"))+
+  scale_y_continuous(labels=percent,limits=c(0,.3),breaks=seq(0,.3,.02))+
+  scale_color_discrete(name="School")+
+  theme(text=element_text(family="Times"))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  theme(legend.position = "bottom")
+
+```
+\newpage
+
+### Princeton
+
+```{r, echo=FALSE, warning=FALSE,fig.height=6}
+# princeton
+goo <- subset(princeton, YEAR %in% c("20122013", "20132014", "20142015","20152016","20162017"))
+
+ggplot(goo,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor(SCHOOL_CODE)))+
+  geom_line(size=2)+
+  geom_point(size=5)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nPrinceton")+
+  labs(x = "School year", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_x_discrete(breaks=c("20122013","20132014","20142015","20152016","20162017"),labels=c("12/13","13/14","14/15","15/16","16/17"))+
+  scale_y_continuous(labels=percent,limits=c(0,.35),breaks=seq(0,.35,.05))+
+  scale_color_discrete(name="School")+
+  theme(text=element_text(family="Times"))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  theme(legend.position = "bottom")
+
+```
+\newpage
+
+### Trenton
+```{r, echo=FALSE, warning=FALSE,fig.height=6}
+# trenton
+goo <- subset(trenton, YEAR %in% c("20122013", "20132014", "20142015","20152016","20162017"))
+
+ggplot(goo,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor(SCHOOL_CODE)))+
+  geom_line(size=2)+
+  geom_point(size=5)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nTrenton")+
+  labs(x = "School year", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_x_discrete(breaks=c("20122013","20132014","20142015","20152016","20162017"),labels=c("12/13","13/14","14/15","15/16","16/17"))+
+  scale_y_continuous(labels=percent,limits=c(0,.8),breaks=seq(0,.8,.1))+
+  scale_color_discrete(name="School")+
+  theme(text=element_text(family="Times"))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  theme(legend.position = "bottom")
+
+```
+\newpage
+
+### Robbinsville
+```{r, echo=FALSE, warning=FALSE}
+# robbins
+goo <- subset(robbins, YEAR %in% c("20122013", "20132014", "20142015","20152016","20162017"))
+
+ggplot(goo,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor(SCHOOL_CODE)))+
+  geom_line(size=2)+
+  geom_point(size=5)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nRobbinsville")+
+  labs(x = "School year", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_x_discrete(breaks=c("20122013","20132014","20142015","20152016","20162017"),labels=c("12/13","13/14","14/15","15/16","16/17"))+
+  scale_y_continuous(labels=percent,limits=c(0,.1),breaks=seq(0,.1,.02))+
+  scale_color_discrete(name="School")+
+  theme(text=element_text(family="Times"))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  theme(legend.position = "bottom")
+
+```
+\newpage
+
+### Windsor-Plainsboro
+```{r, echo=FALSE, warning=FALSE}
+# Windsor-Plainsboro
+goo <- subset(winplain, YEAR %in% c("20122013", "20132014", "20142015","20152016","20162017"))
+
+ggplot(goo,aes(x=YEAR,y=PERCENT_CHRONIC_ABSENT,group=SCHOOL_CODE, color=factor(SCHOOL_CODE)))+
+  geom_line(size=2)+
+  geom_point(size=5)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("\n\nWindsor-Plainsboro")+
+  labs(x = "School year", y = "Chronic absenteeism rate")+
+  theme(plot.title = element_text(face="bold", size=14, hjust=0))+
+  theme(axis.title = element_text(face="bold", size=14))+ 
+  theme(axis.text.x  = element_text(size=14),axis.text.y  = element_text(size=14))+
+  theme(legend.text=element_text(size=14),legend.title=element_text(size=14))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_x_discrete(breaks=c("20122013","20132014","20142015","20152016","20162017"),labels=c("12/13","13/14","14/15","15/16","16/17"))+
+  scale_y_continuous(labels=percent,limits=c(0,.2),breaks=seq(0,.2,.02))+
+  scale_color_discrete(name="School")+
+  theme(text=element_text(family="Times"))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  theme(legend.position = "bottom")
+
+```
+\newpage
+
 

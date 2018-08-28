@@ -1,7 +1,7 @@
 ---
 title: "Mindprint - Math"
 author: "Felicia Zhang"
-date: '2018-07-16'
+date: '2018-07-25'
 output: pdf_document
 toc: yes
 toc_depth: 2
@@ -65,14 +65,18 @@ subs <- unique(mindprintdata$student_id)
 # duplicates = subID 441, 8826, 4573, 
 
 # Find matching subjects in 70C
-foo <- `70C`[22:46,]
+z <- which(`70C`$Question=="student_id")
+zz <- length(`70C`$Question)
+foo <- `70C`[(z+1):zz,]
 foo[] <- lapply(foo, function(x) as.numeric(as.character(x)))
 colnames(foo)[1] <- "student_id"
 
 foofinal1 <- merge(mindprintdata, foo)
 
 # Find matching subjects in 72C
-foo <- `72C`[22:47,]
+z <- which(`72C`$Question=="student_id")
+zz <- length(`72C`$Question)
+foo <- `72C`[(z+1):zz,]
 foo[] <- lapply(foo, function(x) as.numeric(as.character(x)))
 colnames(foo)[1] <- "student_id"
 
@@ -88,11 +92,9 @@ finalDF$ACTmathscore <- finalDF$ACTmathraw / 60
 finalDF2 <- na.omit(finalDF)
 ```
 
-3 duplicates: subID 6381, 4836, 3884, took both 70C and 72C
-
 \newpage
 
-# ACT Math (n = 47)
+# ACT Math (n = 61)
 ## Overall score 
 ### Visual motor speed 
 ```{r, echo=FALSE, warning=FALSE}
@@ -226,7 +228,7 @@ cor.test(finalDF2$LAN_Az, finalDF2$ACTmathscore, method="pearson")
 ```
 \newpage
 
-### Verbal reasoning speed (p < 0.05)
+### Verbal reasoning speed 
 ```{r, echo=FALSE, warning=FALSE}
 
 ggplot(finalDF2,aes(x=LAN_Sz,y=ACTmathscore))+
@@ -292,7 +294,7 @@ cor.test(finalDF2$NVR_Sz, finalDF2$ACTmathscore, method="pearson")
 ```
 \newpage
 
-### Working memory accuracy  (p < 0.05)
+### Working memory accuracy  (p = 0.07)
 ```{r, echo=FALSE, warning=FALSE}
 
 ggplot(finalDF2,aes(x=WM_Az,y=ACTmathscore))+
@@ -447,7 +449,7 @@ cor.test(finalDF2$SMEM_Sz, finalDF2$ACTmathscore, method="pearson")
 ```
 \newpage
 
-### Spatial perception accuracy (p < 0.05)
+### Spatial perception accuracy (p < 0.01)
 ```{r, echo=FALSE, warning=FALSE}
 
 ggplot(finalDF2,aes(x=SPA_Az,y=ACTmathscore))+
@@ -559,7 +561,7 @@ cor.test(EA_DF$SM_Sz, EA_DF$EAscore, method="pearson")
 ```
 \newpage
 
-### Verbal memory accuracy (p=0.07)
+### Verbal memory accuracy 
 ```{r, echo=FALSE, warning=FALSE}
 
 ggplot(EA_DF,aes(x=VMEM_Az,y=EAscore))+
@@ -669,7 +671,7 @@ cor.test(EA_DF$LAN_Az, EA_DF$EAscore, method="pearson")
 ```
 \newpage
 
-### Verbal reasoning speed (p < 0.05)
+### Verbal reasoning speed 
 ```{r, echo=FALSE, warning=FALSE}
 
 ggplot(EA_DF,aes(x=LAN_Sz,y=EAscore))+
@@ -691,7 +693,7 @@ cor.test(EA_DF$LAN_Sz, EA_DF$EAscore, method="pearson")
 ```
 \newpage
 
-### Abstract reasoning accuracy
+### Abstract reasoning accuracy (p = 0.08)
 ```{r, echo=FALSE, warning=FALSE}
 
 ggplot(EA_DF,aes(x=NVR_Az,y=EAscore))+
@@ -779,7 +781,7 @@ cor.test(EA_DF$WM_Sz, EA_DF$EAscore, method="pearson")
 ```
 \newpage
 
-### Working memory efficiency (p < 0.05)
+### Working memory efficiency 
 ##### Average of normed accuracy and speed scores for working memory.
 ```{r, echo=FALSE, warning=FALSE}
 
@@ -890,7 +892,7 @@ cor.test(EA_DF$SMEM_Sz, EA_DF$EAscore, method="pearson")
 ```
 \newpage
 
-### Spatial perception accuracy (p < 0.05)
+### Spatial perception accuracy (p < 0.001)
 ```{r, echo=FALSE, warning=FALSE}
 
 ggplot(EA_DF,aes(x=SPA_Az,y=EAscore))+
@@ -1001,7 +1003,7 @@ cor.test(GT_DF$VMEM_Sz, GT_DF$GTscore, method="pearson")
 ```
 \newpage
 
-### Flexible thinking accuracy (p=0.06)
+### Flexible thinking accuracy
 ```{r, echo=FALSE, warning=FALSE}
 
 ggplot(GT_DF,aes(x=ABF_Az,y=GTscore))+
@@ -1023,7 +1025,7 @@ cor.test(GT_DF$ABF_Az, GT_DF$GTscore, method="pearson")
 ```
 \newpage
 
-### Flexible thinking speed (p=0.05)
+### Flexible thinking speed
 ```{r, echo=FALSE, warning=FALSE}
 
 ggplot(GT_DF,aes(x=ABF_Sz,y=GTscore))+
@@ -1067,7 +1069,7 @@ cor.test(GT_DF$LAN_Az, GT_DF$GTscore, method="pearson")
 ```
 \newpage
 
-### Verbal reasoning speed (p < 0.05)
+### Verbal reasoning speed 
 ```{r, echo=FALSE, warning=FALSE}
 
 ggplot(GT_DF,aes(x=LAN_Sz,y=GTscore))+
@@ -1177,7 +1179,7 @@ cor.test(GT_DF$WM_Sz, GT_DF$GTscore, method="pearson")
 ```
 \newpage
 
-### Working memory efficiency
+### Working memory efficiency (p = 0.07)
 ##### Average of normed accuracy and speed scores for working memory.
 ```{r, echo=FALSE, warning=FALSE}
 
@@ -1244,7 +1246,7 @@ cor.test(GT_DF$ATT_Sz, GT_DF$GTscore, method="pearson")
 ```
 \newpage
 
-### Visual memory accuracy (p < 0.05)
+### Visual memory accuracy 
 ```{r, echo=FALSE, warning=FALSE}
 
 ggplot(GT_DF,aes(x=SMEM_Az,y=GTscore))+
@@ -1399,7 +1401,7 @@ cor.test(AG_DF$VMEM_Sz, AG_DF$AGscore, method="pearson")
 ```
 \newpage
 
-### Flexible thinking accuracy (p=0.06)
+### Flexible thinking accuracy 
 ```{r, echo=FALSE, warning=FALSE}
 
 ggplot(AG_DF,aes(x=ABF_Az,y=AGscore))+
@@ -1465,7 +1467,7 @@ cor.test(AG_DF$LAN_Az, AG_DF$AGscore, method="pearson")
 ```
 \newpage
 
-### Verbal reasoning speed (p = 0.05)
+### Verbal reasoning speed
 ```{r, echo=FALSE, warning=FALSE}
 
 ggplot(AG_DF,aes(x=LAN_Sz,y=AGscore))+
@@ -1729,3 +1731,11 @@ ggplot(AG_DF,aes(x=SPA_Sz,y=AGscore))+
 cor.test(AG_DF$SPA_Sz, AG_DF$AGscore, method="pearson")    
 ```
 \newpage
+
+## Summary
+
+1. Spatial perception accuracy predicts overall math score, pre-algebra, trig 
+2. WM efficiency predicts overall math score, trig (almost), intermediate algebra/geometry
+3. WM accuracy predicts intermediate algebra/geometry
+4. Abstract reasoning accuracy predicts pre-algebra
+
